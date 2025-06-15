@@ -166,7 +166,7 @@ class SocialMediaUploader:
         
         return any(platform in input_string.lower() for platform in video_platforms)
 
-    def is_media_file(self, file_path: str) -> tuple[bool, str]:
+    def is_media_file(self, file_path: str) -> tuple:
         """
         Check if file is a valid media file
         
@@ -190,7 +190,7 @@ class SocialMediaUploader:
         else:
             return False, None
 
-    def get_media_source(self, prompt_message: str = "Media source", allow_images: bool = True) -> tuple[str, str, str]:
+    def get_media_source(self, prompt_message: str = "Media source", allow_images: bool = True) -> tuple:
         """
         Universal media source getter - mendukung file lokal dan URL untuk video/image
         
@@ -578,17 +578,24 @@ class SocialMediaUploader:
             language = self.get_ai_language_preference()
             
             self._log("Generating AI content dengan Gemini 2.0-flash...", "AI")
-            result = self.facebook_uploader.create_facebook_post(
-                use_ai=True, 
-                ai_prompt=prompt, 
-                content_type="status",
-                language=language
-            )
             
-            if result.get("success"):
-                self._log("AI status berhasil dipost!", "SUCCESS")
+            # Generate text post for Facebook
+            ai_post = self.ai_assistant.generate_text_post(prompt, "facebook", language=language)
+            
+            if ai_post:
+                content = ai_post.get('content', prompt)
+                
+                result = self.facebook_uploader.create_facebook_post(content=content)
+                
+                if result.get("success"):
+                    self._log("AI status berhasil dipost!", "SUCCESS")
+                    print(f"\n{Fore.GREEN}📝 Generated Content:")
+                    print(f"Title: {ai_post.get('title', 'N/A')}")
+                    print(f"Content: {content[:100]}...")
+                else:
+                    self._log(f"AI status gagal: {result.get('message')}", "ERROR")
             else:
-                self._log(f"AI status gagal: {result.get('message')}", "ERROR")
+                self._log("AI content generation failed", "ERROR")
         
         elif choice == "3":
             return
