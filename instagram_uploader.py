@@ -16,8 +16,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import (
     TimeoutException, 
@@ -31,6 +29,13 @@ import argparse
 
 # Initialize colorama
 init(autoreset=True)
+
+# Import Universal Driver Manager
+try:
+    from driver_manager import get_chrome_driver
+    DRIVER_MANAGER_AVAILABLE = True
+except ImportError:
+    DRIVER_MANAGER_AVAILABLE = False
 
 class InstagramUploader:
     def __init__(self, headless: bool = False, debug: bool = False):
@@ -122,8 +127,45 @@ class InstagramUploader:
         print(f"{color}{icon} {message}{Style.RESET_ALL}")
 
     def _setup_driver(self):
-        """Setup Chrome WebDriver dengan konfigurasi optimal untuk Instagram"""
+        """Setup Chrome WebDriver menggunakan Universal Driver Manager"""
         self._log("Setting up browser for Instagram...")
+        
+        try:
+            if DRIVER_MANAGER_AVAILABLE:
+                # Use Universal Driver Manager
+                additional_options = [
+                    '--disable-notifications',
+                    '--disable-popup-blocking',
+                    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                ]
+                
+                self.driver = get_chrome_driver(
+                    headless=self.headless,
+                    additional_options=additional_options
+                )
+                
+            else:
+                # Fallback to manual setup
+                self._log("Universal Driver Manager not available, using fallback...", "WARNING")
+                self._setup_driver_fallback()
+            
+            # Setup wait
+            self.wait = WebDriverWait(self.driver, 30)
+            
+            self._log("Browser ready for Instagram", "SUCCESS")
+            
+        except Exception as e:
+            self._log(f"Failed to setup browser: {str(e)}", "ERROR")
+            self._log("Troubleshooting tips:", "INFO")
+            self._log("1. Run: python driver_manager.py --diagnostics", "INFO")
+            self._log("2. Install Chrome browser", "INFO")
+            self._log("3. Install webdriver-manager: pip install webdriver-manager", "INFO")
+            raise
+
+    def _setup_driver_fallback(self):
+        """Fallback driver setup"""
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.chrome.options import Options
         
         chrome_options = Options()
         
@@ -153,18 +195,16 @@ class InstagramUploader:
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
         try:
-            # Try to find ChromeDriver automatically
+            # Try WebDriver Manager
             try:
                 from webdriver_manager.chrome import ChromeDriverManager
                 
-                # Setup ChromeDriver dengan log suppression
                 service = Service(
                     ChromeDriverManager().install(),
                     log_path=os.devnull,
                     service_args=['--silent']
                 )
                 
-                # Suppress Selenium logs
                 os.environ['WDM_LOG_LEVEL'] = '0'
                 os.environ['WDM_PRINT_FIRST_LINE'] = 'False'
                 
@@ -180,17 +220,8 @@ class InstagramUploader:
             # Anti-detection scripts
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
-            self.wait = WebDriverWait(self.driver, 30)
-            
-            self._log("Browser ready for Instagram", "SUCCESS")
-            
         except Exception as e:
             self._log(f"Failed to setup browser: {str(e)}", "ERROR")
-            self._log("Possible solutions:", "INFO")
-            self._log("1. Install Chrome browser", "INFO")
-            self._log("2. Update Chrome to latest version", "INFO")
-            self._log("3. Install ChromeDriver manually", "INFO")
-            self._log("4. Check if antivirus is blocking ChromeDriver", "INFO")
             raise
 
     def _find_element_by_selectors(self, selectors: list, timeout: int = 10, visible: bool = True) -> Optional[Any]:

@@ -15,8 +15,6 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import (
     TimeoutException, 
@@ -25,12 +23,18 @@ from selenium.common.exceptions import (
     ElementNotInteractableException,
     StaleElementReferenceException
 )
-from webdriver_manager.chrome import ChromeDriverManager
 from colorama import init, Fore, Style, Back
 import argparse
 
 # Initialize colorama untuk Windows compatibility
 init(autoreset=True)
+
+# Import Universal Driver Manager
+try:
+    from driver_manager import get_chrome_driver
+    DRIVER_MANAGER_AVAILABLE = True
+except ImportError:
+    DRIVER_MANAGER_AVAILABLE = False
 
 class TikTokUploader:
     def __init__(self, headless: bool = False, debug: bool = False):
@@ -126,8 +130,49 @@ class TikTokUploader:
         print(f"{color}{icon} {message}{Style.RESET_ALL}")
 
     def _setup_driver(self):
-        """Setup Chrome WebDriver dengan konfigurasi optimal dan suppress logs"""
-        self._log("Menyiapkan browser...")
+        """Setup Chrome WebDriver menggunakan Universal Driver Manager"""
+        self._log("Setting up browser for TikTok...")
+        
+        try:
+            if DRIVER_MANAGER_AVAILABLE:
+                # Use Universal Driver Manager
+                additional_options = [
+                    '--disable-images',
+                    '--blink-settings=imagesEnabled=false',
+                    '--disable-plugins-discovery',
+                    '--disable-translate',
+                    '--disable-geolocation',
+                    '--disable-media-stream',
+                    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36'
+                ]
+                
+                self.driver = get_chrome_driver(
+                    headless=self.headless,
+                    additional_options=additional_options
+                )
+                
+            else:
+                # Fallback to manual setup
+                self._log("Universal Driver Manager not available, using fallback...", "WARNING")
+                self._setup_driver_fallback()
+            
+            # Setup wait
+            self.wait = WebDriverWait(self.driver, 30)
+            
+            self._log("Browser ready for TikTok", "SUCCESS")
+            
+        except Exception as e:
+            self._log(f"Failed to setup browser: {str(e)}", "ERROR")
+            self._log("Troubleshooting tips:", "INFO")
+            self._log("1. Run: python driver_manager.py --diagnostics", "INFO")
+            self._log("2. Install Chrome browser", "INFO")
+            self._log("3. Install webdriver-manager: pip install webdriver-manager", "INFO")
+            raise
+
+    def _setup_driver_fallback(self):
+        """Fallback driver setup jika Universal Driver Manager tidak tersedia"""
+        from selenium.webdriver.chrome.service import Service
+        from selenium.webdriver.chrome.options import Options
         
         chrome_options = Options()
         
@@ -137,92 +182,39 @@ class TikTokUploader:
         chrome_options.add_argument("--disable-blink-features=AutomationControlled")
         chrome_options.add_argument("--window-size=1280,800")
         
-        # Additional Chrome options yang diminta
         if self.headless:
             chrome_options.add_argument('--headless=new')
+        
+        # Additional options
         chrome_options.add_argument('--disable-extensions')
         chrome_options.add_argument('--disable-gpu')
-        chrome_options.add_argument('--no-sandbox')
-        chrome_options.add_argument('--disable-dev-shm-usage')
-        chrome_options.add_argument('--disable-images')
-        chrome_options.add_argument('--blink-settings=imagesEnabled=false')
-        chrome_options.add_argument('--disable-plugins-discovery')
-        chrome_options.add_argument('--disable-translate')
-        chrome_options.add_argument('--disable-popup-blocking')
         chrome_options.add_argument('--disable-notifications')
-        chrome_options.add_argument('--disable-geolocation')
-        chrome_options.add_argument('--disable-media-stream')
-        chrome_options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36')
+        chrome_options.add_argument('--disable-popup-blocking')
+        chrome_options.add_argument('--log-level=3')
+        chrome_options.add_argument('--silent')
         
-        # Suppress Chrome logs dan error messages
-        chrome_options.add_argument("--log-level=3")  # Suppress INFO, WARNING, ERROR
-        chrome_options.add_argument("--silent")
-        chrome_options.add_argument("--disable-logging")
-        chrome_options.add_argument("--disable-gpu-logging")
-        chrome_options.add_argument("--disable-extensions-file-access-check")
-        chrome_options.add_argument("--disable-extensions-http-throttling")
-        chrome_options.add_argument("--disable-extensions-except")
-        chrome_options.add_argument("--disable-background-timer-throttling")
-        chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-        chrome_options.add_argument("--disable-renderer-backgrounding")
-        chrome_options.add_argument("--disable-features=TranslateUI")
-        chrome_options.add_argument("--disable-ipc-flooding-protection")
-        chrome_options.add_argument("--disable-background-networking")
-        chrome_options.add_argument("--disable-default-apps")
-        chrome_options.add_argument("--disable-sync")
-        chrome_options.add_argument("--hide-scrollbars")
-        chrome_options.add_argument("--metrics-recording-only")
-        chrome_options.add_argument("--mute-audio")
-        chrome_options.add_argument("--no-first-run")
-        chrome_options.add_argument("--safebrowsing-disable-auto-update")
-        chrome_options.add_argument("--disable-component-update")
-        chrome_options.add_argument("--disable-domain-reliability")
-        
-        # Suppress network errors (STUN, WebRTC, etc.)
-        chrome_options.add_argument("--disable-webrtc")
-        chrome_options.add_argument("--disable-webrtc-multiple-routes")
-        chrome_options.add_argument("--disable-webrtc-hw-decoding")
-        chrome_options.add_argument("--disable-webrtc-hw-encoding")
-        chrome_options.add_argument("--disable-webrtc-encryption")
-        chrome_options.add_argument("--force-webrtc-ip-handling-policy=disable_non_proxied_udp")
-        
-        # Anti-detection options
+        # Anti-detection
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
-        chrome_options.add_argument("--disable-web-security")
         
-        # Suppress additional logs
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-logging"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        if self.headless:
-            self._log("Mode headless diaktifkan")
-        
+        # Try WebDriver Manager
         try:
-            # Setup ChromeDriver dengan log suppression
+            from webdriver_manager.chrome import ChromeDriverManager
+            
             service = Service(
                 ChromeDriverManager().install(),
-                log_path=os.devnull,  # Suppress ChromeDriver logs
-                service_args=['--silent']  # Additional silence
+                log_path=os.devnull,
+                service_args=['--silent']
             )
-            
-            # Suppress Selenium logs
-            os.environ['WDM_LOG_LEVEL'] = '0'
-            os.environ['WDM_PRINT_FIRST_LINE'] = 'False'
             
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
             
-            # Anti-detection script
-            self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            # Setup wait
-            self.wait = WebDriverWait(self.driver, 30)
-            
-            self._log("Browser siap digunakan", "SUCCESS")
-            
         except Exception as e:
-            self._log(f"Gagal menyiapkan browser: {str(e)}", "ERROR")
-            raise
+            # Try system ChromeDriver
+            self.driver = webdriver.Chrome(options=chrome_options)
+        
+        # Anti-detection script
+        self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
     def _find_element_by_selectors(self, selectors: list, timeout: int = 10, visible: bool = True) -> Optional[Any]:
         """Mencari elemen menggunakan multiple selectors - versi sederhana"""
@@ -576,9 +568,13 @@ class TikTokUploader:
         screenshot_path = self.screenshots_dir / filename
         
         try:
-            self.driver.save_screenshot(str(screenshot_path))
-            self._log(f"Screenshot disimpan: {screenshot_path.name}", "INFO")
-            return str(screenshot_path)
+            if self.driver:
+                self.driver.save_screenshot(str(screenshot_path))
+                self._log(f"Screenshot disimpan: {screenshot_path.name}", "INFO")
+                return str(screenshot_path)
+            else:
+                self._log("No driver available for screenshot", "WARNING")
+                return None
         except Exception as e:
             self._log(f"Gagal menyimpan screenshot: {str(e)}", "WARNING")
             return None
