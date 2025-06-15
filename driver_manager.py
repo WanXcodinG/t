@@ -4,6 +4,7 @@ Universal Driver Manager untuk Social Media Uploader
 Mengatasi masalah ChromeDriver di semua platform dengan deteksi otomatis
 Support untuk Windows, Linux/Ubuntu VPS, dan macOS
 Fixed untuk error [WinError 193] %1 is not a valid Win32 application
+Enhanced Chrome detection untuk Windows
 """
 
 import os
@@ -292,46 +293,62 @@ class UniversalDriverManager:
             return False
 
     def get_chrome_version(self) -> Optional[str]:
-        """Get Chrome browser version dengan improved detection untuk Ubuntu"""
+        """Enhanced Chrome version detection untuk Windows"""
         if self._chrome_version:
             return self._chrome_version
         
         try:
             if self.system == "windows":
-                # Method 1: Registry detection
+                # Method 1: Enhanced Registry detection
                 try:
                     import winreg
                     
-                    paths = [
-                        r"SOFTWARE\Google\Chrome\BLBeacon",
-                        r"SOFTWARE\Wow6432Node\Google\Chrome\BLBeacon",
-                        r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"
+                    # Try multiple registry paths
+                    registry_paths = [
+                        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Google\Chrome\BLBeacon"),
+                        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Wow6432Node\Google\Chrome\BLBeacon"),
+                        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Google\Chrome\BLBeacon"),
+                        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"),
+                        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"),
+                        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Google\Update\Clients\{8A69D345-D564-463c-AFF1-A69D9E530F96}"),
+                        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Wow6432Node\Google\Update\Clients\{8A69D345-D564-463c-AFF1-A69D9E530F96}")
                     ]
                     
-                    for path in paths:
+                    for hkey, path in registry_paths:
                         try:
-                            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as key:
-                                version = winreg.QueryValueEx(key, "version")[0]
-                                self._chrome_version = version
-                                self._log(f"Chrome version detected via registry: {version}", "SUCCESS")
-                                return version
-                        except:
+                            with winreg.OpenKey(hkey, path) as key:
+                                # Try different value names
+                                value_names = ["version", "pv", "Version"]
+                                for value_name in value_names:
+                                    try:
+                                        version = winreg.QueryValueEx(key, value_name)[0]
+                                        if version and len(version.split('.')) >= 3:
+                                            self._chrome_version = version
+                                            self._log(f"Chrome version detected via registry: {version}", "SUCCESS")
+                                            return version
+                                    except FileNotFoundError:
+                                        continue
+                        except (FileNotFoundError, PermissionError):
                             continue
                 except ImportError:
-                    pass
+                    if self.debug:
+                        self._log("winreg not available", "DEBUG")
                 
-                # Method 2: File version detection
+                # Method 2: Enhanced File version detection
                 chrome_paths = [
                     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+                    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+                    os.path.expanduser(r"~\AppData\Local\Google\Chrome\Application\chrome.exe"),
+                    os.path.expanduser(r"~\AppData\Roaming\Google\Chrome\Application\chrome.exe")
                 ]
                 
                 for chrome_path in chrome_paths:
                     if os.path.exists(chrome_path):
                         try:
+                            # Try to get version via executable
                             result = subprocess.run([
                                 chrome_path, "--version"
-                            ], capture_output=True, text=True, timeout=10)
+                            ], capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
                             
                             if result.returncode == 0:
                                 version_line = result.stdout.strip()
@@ -342,8 +359,50 @@ class UniversalDriverManager:
                                     self._chrome_version = version
                                     self._log(f"Chrome version detected via executable: {version}", "SUCCESS")
                                     return version
-                        except:
+                        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
                             continue
+                
+                # Method 3: Try PowerShell for version detection
+                try:
+                    powershell_cmd = '''
+                    $chrome = Get-ItemProperty "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe" -ErrorAction SilentlyContinue
+                    if ($chrome) {
+                        $version = (Get-Item $chrome.'(Default)').VersionInfo.ProductVersion
+                        Write-Output $version
+                    }
+                    '''
+                    
+                    result = subprocess.run([
+                        "powershell", "-Command", powershell_cmd
+                    ], capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+                    
+                    if result.returncode == 0 and result.stdout.strip():
+                        version = result.stdout.strip()
+                        if len(version.split('.')) >= 3:
+                            self._chrome_version = version
+                            self._log(f"Chrome version detected via PowerShell: {version}", "SUCCESS")
+                            return version
+                except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+                    pass
+                
+                # Method 4: Check if Chrome is in PATH
+                try:
+                    chrome_in_path = shutil.which('chrome')
+                    if chrome_in_path:
+                        result = subprocess.run([
+                            chrome_in_path, "--version"
+                        ], capture_output=True, text=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+                        
+                        if result.returncode == 0:
+                            import re
+                            version_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', result.stdout)
+                            if version_match:
+                                version = version_match.group(1)
+                                self._chrome_version = version
+                                self._log(f"Chrome version detected via PATH: {version}", "SUCCESS")
+                                return version
+                except:
+                    pass
                             
             elif self.system == "linux":
                 # Enhanced Linux Chrome version detection
@@ -494,8 +553,13 @@ class UniversalDriverManager:
                 os.chmod(path, 0o755)
             
             # Test execution
-            result = subprocess.run([path, "--version"], 
-                                  capture_output=True, text=True, timeout=15)
+            if self.system == "windows":
+                result = subprocess.run([path, "--version"], 
+                                      capture_output=True, text=True, timeout=15,
+                                      creationflags=subprocess.CREATE_NO_WINDOW)
+            else:
+                result = subprocess.run([path, "--version"], 
+                                      capture_output=True, text=True, timeout=15)
             
             if result.returncode == 0 and "ChromeDriver" in result.stdout:
                 return True
@@ -841,11 +905,19 @@ class UniversalDriverManager:
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
         # Setup service
-        service = Service(
-            chromedriver_path,
-            log_path=os.devnull,
-            service_args=['--silent']
-        )
+        if self.system == "windows":
+            service = Service(
+                chromedriver_path,
+                log_path=os.devnull,
+                service_args=['--silent'],
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+        else:
+            service = Service(
+                chromedriver_path,
+                log_path=os.devnull,
+                service_args=['--silent']
+            )
         
         try:
             # Create driver
