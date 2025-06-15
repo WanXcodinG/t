@@ -3,6 +3,7 @@
 Social Media Uploader Super Advanced dengan AI, FFmpeg, dan yt-dlp Integration
 Upload ke TikTok, Facebook, YouTube, Instagram dengan dukungan AI content generation,
 video enhancement, dan video downloader terintegrasi
+Fixed untuk Ubuntu VPS dengan Universal Driver Manager
 """
 
 import os
@@ -20,7 +21,7 @@ import argparse
 # Initialize colorama
 init(autoreset=True)
 
-# Import modules
+# Import modules dengan error handling
 try:
     from tiktok_uploader import TikTokUploader
     from facebook_uploader import FacebookUploader
@@ -44,6 +45,13 @@ try:
 except ImportError:
     FFMPEG_AVAILABLE = False
 
+# Import Universal Driver Manager
+try:
+    from driver_manager import UniversalDriverManager, check_driver_status, run_driver_diagnostics
+    DRIVER_MANAGER_AVAILABLE = True
+except ImportError:
+    DRIVER_MANAGER_AVAILABLE = False
+
 class SocialMediaUploader:
     def __init__(self, debug: bool = False):
         """
@@ -62,6 +70,9 @@ class SocialMediaUploader:
         self.downloads_dir.mkdir(exist_ok=True)
         self.edited_videos_dir = self.base_dir / "edited_videos"
         self.edited_videos_dir.mkdir(exist_ok=True)
+        
+        # Initialize Universal Driver Manager
+        self.driver_manager = UniversalDriverManager(debug=debug) if DRIVER_MANAGER_AVAILABLE else None
         
         # Initialize components
         self.video_downloader = VideoDownloader(debug=debug) if UPLOADERS_AVAILABLE else None
@@ -102,6 +113,51 @@ class SocialMediaUploader:
         
         icon = icons.get(level, "📝")
         print(f"{color}{icon} {message}{Style.RESET_ALL}")
+
+    def check_system_requirements(self) -> Dict[str, Any]:
+        """Check system requirements dengan Universal Driver Manager"""
+        self._log("Checking system requirements...", "HEADER")
+        
+        requirements = {
+            "driver_manager": DRIVER_MANAGER_AVAILABLE,
+            "uploaders": UPLOADERS_AVAILABLE,
+            "ai_assistant": AI_AVAILABLE,
+            "video_editor": FFMPEG_AVAILABLE,
+            "chrome_driver": False,
+            "chrome_browser": False,
+            "platform_info": {}
+        }
+        
+        if self.driver_manager:
+            # Get platform info
+            requirements["platform_info"] = {
+                "system": self.driver_manager.system,
+                "architecture": self.driver_manager.architecture,
+                "is_vps": self.driver_manager.is_vps,
+                "is_ubuntu": getattr(self.driver_manager, 'is_ubuntu', False),
+                "is_headless": getattr(self.driver_manager, 'is_headless', False)
+            }
+            
+            # Check Chrome browser
+            chrome_version = self.driver_manager.get_chrome_version()
+            if chrome_version:
+                requirements["chrome_browser"] = True
+                self._log(f"Chrome browser: {chrome_version}", "SUCCESS")
+            else:
+                self._log("Chrome browser not found", "WARNING")
+                if requirements["platform_info"].get("is_ubuntu"):
+                    self._log("Run: python driver_manager.py --install-chrome", "INFO")
+            
+            # Check ChromeDriver
+            chromedriver_path = self.driver_manager.find_existing_chromedriver()
+            if chromedriver_path:
+                requirements["chrome_driver"] = True
+                self._log(f"ChromeDriver found: {chromedriver_path}", "SUCCESS")
+            else:
+                self._log("ChromeDriver not found", "WARNING")
+                self._log("Run: python fix_all_drivers.py", "INFO")
+        
+        return requirements
 
     def get_content_source(self) -> Dict[str, Any]:
         """
@@ -403,6 +459,21 @@ class SocialMediaUploader:
         """
         print(f"\n{Fore.LIGHTMAGENTA_EX}🚀 SMART UPLOAD PIPELINE")
         print("=" * 60)
+        
+        # Check system requirements first
+        requirements = self.check_system_requirements()
+        
+        # Show warnings for missing components
+        if not requirements["chrome_browser"]:
+            self._log("Chrome browser tidak ditemukan!", "WARNING")
+            if requirements["platform_info"].get("is_ubuntu"):
+                self._log("Install dengan: python driver_manager.py --install-chrome", "INFO")
+            else:
+                self._log("Download dari: https://www.google.com/chrome/", "INFO")
+        
+        if not requirements["chrome_driver"]:
+            self._log("ChromeDriver tidak ditemukan!", "WARNING")
+            self._log("Fix dengan: python fix_all_drivers.py", "INFO")
         
         # Step 1: Get content source (video, text, atau media)
         content_source = self.get_content_source()
@@ -821,15 +892,30 @@ class SocialMediaUploader:
             return {"success": False, "message": f"Upload error: {str(e)}"}
 
     def show_main_menu(self):
-        """Show simplified main interactive menu"""
+        """Show simplified main interactive menu dengan system check"""
         print(f"\n{Fore.LIGHTBLUE_EX}🚀 SUPER ADVANCED SOCIAL MEDIA UPLOADER")
         print("=" * 70)
         print(f"{Fore.LIGHTMAGENTA_EX}🎯 Dengan Video + Text + Media Support + AI + FFmpeg + Instagram Integration")
         print()
         
-        print(f"{Fore.YELLOW}📋 MENU UTAMA:")
+        # Quick system check
+        if self.driver_manager:
+            platform_info = {
+                "system": self.driver_manager.system,
+                "is_vps": self.driver_manager.is_vps,
+                "is_ubuntu": getattr(self.driver_manager, 'is_ubuntu', False)
+            }
+            
+            print(f"{Fore.CYAN}💻 System: {platform_info['system'].title()}", end="")
+            if platform_info.get("is_vps"):
+                print(f" (VPS)", end="")
+            if platform_info.get("is_ubuntu"):
+                print(f" Ubuntu", end="")
+            print()
+        
+        print(f"\n{Fore.YELLOW}📋 MENU UTAMA:")
         print("1. 🚀 Smart Upload Pipeline (Video/Text/Media)")
-        print("2. 📊 System Status & Statistics")
+        print("2. 📊 System Status & Diagnostics")
         print("3. 🧹 System Cleanup")
         print("4. ❌ Exit")
         
@@ -840,7 +926,7 @@ class SocialMediaUploader:
             self._display_pipeline_results(result)
         
         elif choice == "2":
-            self._show_system_status_and_stats()
+            self._show_system_status_and_diagnostics()
         
         elif choice == "3":
             self._system_cleanup_menu()
@@ -900,21 +986,35 @@ class SocialMediaUploader:
                 if "video_id" in upload_result:
                     print(f"  ID: {upload_result['video_id']}")
 
-    def _show_system_status_and_stats(self):
-        """Show system status dan statistics"""
-        print(f"\n{Fore.GREEN}⚙️ SYSTEM STATUS:")
-        print("=" * 40)
+    def _show_system_status_and_diagnostics(self):
+        """Show system status dan run diagnostics"""
+        print(f"\n{Fore.GREEN}⚙️ SYSTEM STATUS & DIAGNOSTICS:")
+        print("=" * 50)
+        
+        # Run comprehensive diagnostics
+        if self.driver_manager:
+            self.driver_manager.run_diagnostics()
+        else:
+            self._log("Universal Driver Manager tidak tersedia", "ERROR")
+            self._log("Install dengan: pip install -r requirements.txt", "INFO")
+        
+        print(f"\n{Fore.YELLOW}📋 COMPONENT STATUS:")
         
         # Check components
         print(f"Video Downloader: {'✅' if UPLOADERS_AVAILABLE and self.video_downloader else '❌'}")
         print(f"AI Assistant: {'✅' if AI_AVAILABLE and self.ai_assistant else '❌'}")
         print(f"Video Editor: {'✅' if FFMPEG_AVAILABLE and self.video_editor else '❌'}")
+        print(f"Universal Driver Manager: {'✅' if DRIVER_MANAGER_AVAILABLE and self.driver_manager else '❌'}")
         
         # Check uploaders
+        print(f"\n{Fore.YELLOW}📱 UPLOADER STATUS:")
         print(f"TikTok Uploader: {'✅' if self.tiktok_uploader else '❌'}")
         print(f"Facebook Uploader: {'✅' if self.facebook_uploader else '❌'}")
         print(f"YouTube Uploader: {'✅' if self.youtube_uploader else '❌'}")
         print(f"Instagram Uploader: {'✅' if self.instagram_uploader else '❌'}")
+        
+        # Check external tools
+        print(f"\n{Fore.YELLOW}🔧 EXTERNAL TOOLS:")
         
         # Check yt-dlp
         if self.video_downloader and self.video_downloader.ytdlp_path:
@@ -952,9 +1052,10 @@ class SocialMediaUploader:
             print(f"Total files: {stats['total_files']}")
             print(f"Total size: {stats['total_size_mb']:.2f} MB")
             
-            print(f"\n📱 Platform breakdown:")
-            for platform, data in stats['platform_breakdown'].items():
-                print(f"  {platform}: {data['files']} files ({data['size_mb']:.2f} MB)")
+            if stats['platform_breakdown']:
+                print(f"\n📱 Platform breakdown:")
+                for platform, data in stats['platform_breakdown'].items():
+                    print(f"  {platform}: {data['files']} files ({data['size_mb']:.2f} MB)")
         
         # Check disk space
         try:
@@ -964,6 +1065,14 @@ class SocialMediaUploader:
             print(f"\nFree disk space: {free_gb:.2f} GB")
         except:
             print(f"\nFree disk space: Unknown")
+        
+        # Show troubleshooting tips if issues found
+        print(f"\n{Fore.YELLOW}🔧 TROUBLESHOOTING TIPS:")
+        print("• Fix all drivers: python fix_all_drivers.py")
+        print("• Test drivers: python driver_manager.py --test")
+        print("• Install Chrome (Ubuntu): python driver_manager.py --install-chrome")
+        print("• Set Gemini API: set GEMINI_API_KEY=your_api_key")
+        print("• Install FFmpeg: Check setup_ffmpeg.md")
 
     def _system_cleanup_menu(self):
         """System cleanup menu"""

@@ -2,6 +2,7 @@
 """
 YouTube Shorts Uploader menggunakan YouTube Data API v3
 Lebih reliable dan tidak memerlukan Selenium
+Fixed untuk Ubuntu VPS dengan Universal Driver Manager integration
 """
 
 import os
