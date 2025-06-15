@@ -166,25 +166,41 @@ def test_chromedriver_setup():
         return False
 
 def test_python_dependencies():
-    """Test Python dependencies tanpa import yang kompleks"""
+    """Test Python dependencies dengan improved detection"""
     log("Testing Python Dependencies", "HEADER")
     
     required_packages = {
         "selenium": "Selenium WebDriver",
         "webdriver_manager": "WebDriver Manager", 
         "colorama": "Colorama",
-        "requests": "Requests",
-        "google_generativeai": "Google Generative AI (Optional)",
-        "opencv_python": "OpenCV (Optional)",
-        "pillow": "Pillow (Optional)",
-        "numpy": "NumPy (Optional)",
-        "yt_dlp": "yt-dlp (Optional)"
+        "requests": "Requests"
+    }
+    
+    optional_packages = {
+        "google_generativeai": "Google Generative AI",
+        "opencv_python": "OpenCV",
+        "pillow": "Pillow",
+        "numpy": "NumPy",
+        "yt_dlp": "yt-dlp",
+        "python_dotenv": "Python DotEnv"
     }
     
     installed = 0
-    total = len(required_packages)
+    total = len(required_packages) + len(optional_packages)
     
+    # Test required packages
     for package, description in required_packages.items():
+        try:
+            # Handle package name variations
+            import_name = package.replace('-', '_')
+            __import__(import_name)
+            log(f"{description}: ✅ Installed", "SUCCESS")
+            installed += 1
+        except ImportError:
+            log(f"{description}: ❌ Required - Not installed", "ERROR")
+    
+    # Test optional packages dengan improved detection
+    for package, description in optional_packages.items():
         try:
             # Handle package name variations
             import_name = package.replace('-', '_')
@@ -192,18 +208,73 @@ def test_python_dependencies():
                 import_name = "cv2"
             elif package == "pillow":
                 import_name = "PIL"
+            elif package == "python_dotenv":
+                import_name = "dotenv"
+            elif package == "google_generativeai":
+                import_name = "google.generativeai"
+            elif package == "yt_dlp":
+                import_name = "yt_dlp"
             
             __import__(import_name)
             log(f"{description}: ✅ Installed", "SUCCESS")
             installed += 1
         except ImportError:
-            if package in ["google_generativeai", "opencv_python", "pillow", "numpy", "yt_dlp"]:
-                log(f"{description}: ⚠️ Optional - Not installed", "WARNING")
-            else:
-                log(f"{description}: ❌ Required - Not installed", "ERROR")
+            log(f"{description}: ⚠️ Optional - Not installed", "WARNING")
     
     log(f"Dependencies: {installed}/{total} available", "INFO")
-    return installed >= 4  # At least core dependencies
+    return installed >= len(required_packages)  # At least all required dependencies
+
+def test_gemini_ai_specific():
+    """Test Gemini AI specifically dengan .env detection"""
+    log("Testing Gemini AI Configuration", "HEADER")
+    
+    # Test google-generativeai import
+    try:
+        import google.generativeai as genai
+        log("Google Generative AI: ✅ Library installed", "SUCCESS")
+        
+        # Test .env file
+        env_file = Path(".env")
+        if env_file.exists():
+            log(".env file: ✅ Found", "SUCCESS")
+            
+            # Check if GEMINI_API_KEY is in .env
+            try:
+                with open(env_file, 'r') as f:
+                    content = f.read()
+                    if "GEMINI_API_KEY" in content:
+                        log("GEMINI_API_KEY: ✅ Configured in .env", "SUCCESS")
+                        
+                        # Load .env and check if key is set
+                        try:
+                            from dotenv import load_dotenv
+                            load_dotenv()
+                            api_key = os.getenv('GEMINI_API_KEY')
+                            if api_key and api_key != "your_api_key_here":
+                                log("API Key: ✅ Valid key detected", "SUCCESS")
+                                return True
+                            else:
+                                log("API Key: ⚠️ Placeholder key detected", "WARNING")
+                                log("Replace 'your_api_key_here' with actual API key", "INFO")
+                                return True  # Still consider as configured
+                        except ImportError:
+                            log("python-dotenv: ⚠️ Not installed", "WARNING")
+                            return True
+                    else:
+                        log("GEMINI_API_KEY: ⚠️ Not found in .env", "WARNING")
+                        return True
+            except Exception as e:
+                log(f"Error reading .env: {e}", "WARNING")
+                return True
+        else:
+            log(".env file: ⚠️ Not found", "WARNING")
+            log("Create .env file with GEMINI_API_KEY=your_api_key", "INFO")
+            return True
+            
+    except ImportError:
+        log("Google Generative AI: ❌ Not installed", "ERROR")
+        log("Install with: pip install google-generativeai", "INFO")
+        return False
 
 def test_module_imports():
     """Test module imports tanpa inisialisasi yang membuka Chrome"""
@@ -313,6 +384,7 @@ def run_complete_test():
         ("Chrome Detection", test_chrome_detection),
         ("ChromeDriver Setup", test_chromedriver_setup),
         ("Python Dependencies", test_python_dependencies),
+        ("Gemini AI Configuration", test_gemini_ai_specific),
         ("Module Imports", test_module_imports),
         ("Driver Manager Basic", test_driver_manager_basic),
         ("Uploader Classes", test_uploader_classes)
@@ -356,6 +428,20 @@ def run_complete_test():
         print(f"\n{Fore.CYAN}🚀 NEXT STEPS:")
         print("python social_media_uploader.py")
         
+        # Show Gemini AI status
+        print(f"\n{Fore.LIGHTMAGENTA_EX}🤖 GEMINI AI STATUS:")
+        try:
+            import google.generativeai
+            from dotenv import load_dotenv
+            load_dotenv()
+            api_key = os.getenv('GEMINI_API_KEY')
+            if api_key and api_key != "your_api_key_here":
+                print("✅ Gemini AI ready with valid API key")
+            else:
+                print("⚠️ Gemini AI installed but needs API key in .env file")
+        except ImportError:
+            print("❌ Gemini AI not installed")
+        
     else:
         log(f"⚠️ {total - passed} tests failed", "WARNING")
         
@@ -363,6 +449,7 @@ def run_complete_test():
         print("1. Install Chrome: https://www.google.com/chrome/")
         print("2. Run: python fix_all_drivers.py")
         print("3. Install dependencies: pip install -r requirements.txt")
+        print("4. Set Gemini API key in .env file")
     
     return passed >= total - 2
 
