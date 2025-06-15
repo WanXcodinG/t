@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Gemini AI Assistant untuk Social Media Content Generation
-Menggunakan Google Gemini AI untuk analisis video dan generate konten
-Enhanced dengan Gemini 2.0-flash dan Language Support
+Menggunakan Google Gemini 2.0-flash (Latest & Most Advanced Model)
+Enhanced dengan Multi-modal capabilities dan Advanced Content Generation
 """
 
 import os
@@ -43,7 +43,7 @@ except ImportError:
 class GeminiAIAssistant:
     def __init__(self, debug: bool = False):
         """
-        Initialize Gemini AI Assistant
+        Initialize Gemini AI Assistant with 2.0-flash
         
         Args:
             debug: Enable debug logging
@@ -62,7 +62,7 @@ class GeminiAIAssistant:
         # Load environment variables
         self._load_env_file()
         
-        # Initialize Gemini
+        # Initialize Gemini 2.0-flash
         self._initialize_gemini()
 
     def _log(self, message: str, level: str = "INFO"):
@@ -114,7 +114,7 @@ class GeminiAIAssistant:
                     self._log(f"Error loading .env file: {e}", "WARNING")
 
     def _initialize_gemini(self):
-        """Initialize Gemini AI dengan model terbaru"""
+        """Initialize Gemini 2.0-flash (Latest Model)"""
         if not GENAI_AVAILABLE:
             self._log("google-generativeai tidak tersedia", "ERROR")
             self._log("Install dengan: pip install google-generativeai", "INFO")
@@ -130,17 +130,18 @@ class GeminiAIAssistant:
         try:
             genai.configure(api_key=api_key)
             
-            # Try Gemini 2.0-flash first (latest model)
+            # Use Gemini 2.0-flash (Latest and Most Advanced Model)
             try:
                 self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
                 self.vision_model = genai.GenerativeModel('gemini-2.0-flash-exp')
-                self._log("Gemini 2.0-flash berhasil diinisialisasi", "SUCCESS")
+                self._log("🚀 Gemini 2.0-flash berhasil diinisialisasi!", "SUCCESS")
+                self._log("🎯 Menggunakan model terbaru dan paling canggih", "AI")
                 return True
             except Exception as e:
                 if self.debug:
-                    self._log(f"Gemini 2.0-flash tidak tersedia: {e}", "DEBUG")
+                    self._log(f"Gemini 2.0-flash error: {e}", "DEBUG")
                 
-                # Fallback to gemini-pro
+                # Fallback to gemini-pro if 2.0-flash not available
                 try:
                     self.model = genai.GenerativeModel('gemini-pro')
                     self.vision_model = genai.GenerativeModel('gemini-pro-vision')
@@ -155,7 +156,7 @@ class GeminiAIAssistant:
             return False
 
     def extract_video_frames(self, video_path: str, num_frames: int = 3) -> List[str]:
-        """Extract frames dari video untuk analisis"""
+        """Extract frames dari video untuk analisis dengan Gemini 2.0-flash"""
         if not CV2_AVAILABLE:
             self._log("OpenCV tidak tersedia untuk video analysis", "WARNING")
             return []
@@ -163,7 +164,7 @@ class GeminiAIAssistant:
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video tidak ditemukan: {video_path}")
         
-        self._log(f"🤖 Extracting {num_frames} frames dari video...", "AI")
+        self._log(f"🎬 Extracting {num_frames} frames untuk Gemini 2.0-flash...", "AI")
         
         try:
             cap = cv2.VideoCapture(video_path)
@@ -203,7 +204,7 @@ class GeminiAIAssistant:
             return []
 
     def analyze_video_content(self, video_path: str, language: str = "indonesian") -> Dict[str, Any]:
-        """Analyze video content menggunakan Gemini AI dengan language support"""
+        """Analyze video content menggunakan Gemini 2.0-flash dengan advanced capabilities"""
         if not self.vision_model:
             self._log("Gemini AI tidak tersedia", "ERROR")
             return self._generate_fallback_analysis(video_path, language)
@@ -212,61 +213,124 @@ class GeminiAIAssistant:
             # Extract frames jika CV2 tersedia
             frames = []
             if CV2_AVAILABLE:
-                frames = self.extract_video_frames(video_path, num_frames=3)
+                frames = self.extract_video_frames(video_path, num_frames=5)  # More frames for 2.0-flash
             
             if not frames:
                 # Jika tidak bisa extract frames, gunakan fallback analysis
                 self._log("Tidak bisa extract frames, menggunakan fallback analysis", "WARNING")
                 return self._generate_fallback_analysis(video_path, language)
             
-            self._log(f"🤖 Menganalisis konten video dengan Gemini 2.0-flash...", "AI")
+            self._log(f"🚀 Menganalisis konten video dengan Gemini 2.0-flash...", "AI")
             
-            # Analyze first frame
-            image = Image.open(frames[0])
+            # Analyze multiple frames for better understanding
+            images = [Image.open(frame) for frame in frames[:3]]  # Use first 3 frames
             
-            # Enhanced prompt dengan language support
+            # Enhanced prompt untuk Gemini 2.0-flash dengan advanced capabilities
             if language == "english":
                 prompt = """
-                You are a viral marketing genius and expert YouTube Shorts strategist. Your task is to analyze the given input (visual frames and possibly audio transcription) to create highly engaging metadata.
+                You are an advanced AI content strategist powered by Gemini 2.0-flash. Analyze these video frames to create viral-ready social media content.
 
-                Provide response ONLY in valid JSON format with these keys:
-                "objects": Array of main objects/subjects in the video
-                "activities": Array of activities happening
-                "setting": Setting/environment (indoor/outdoor, location type)
-                "mood": Mood/emotion conveyed
-                "colors": Dominant colors
-                "style": Visual style and quality
-                "viral_score": Viral potential (1-10 scale)
-                "target_audience": Target audience description
-                "content_type": Content type classification
-                "trending_elements": Elements that could make it trending
-                "optimization_tips": Actionable optimization tips
-                "engagement_potential": Engagement potential assessment
-                "platforms": Best platforms for this content
-                "angles": Suggested content angles
+                ADVANCED ANALYSIS REQUIREMENTS:
+                1. Deep visual understanding of scenes, objects, people, emotions
+                2. Context awareness and storytelling potential
+                3. Viral trend prediction and engagement optimization
+                4. Platform-specific content adaptation
+                5. Audience psychology and behavior analysis
+
+                Provide response in PERFECT JSON format with these enhanced keys:
+                {
+                  "visual_elements": {
+                    "main_subjects": ["list of main subjects/people"],
+                    "objects": ["detailed objects in scene"],
+                    "setting": "detailed environment description",
+                    "lighting": "lighting quality and mood",
+                    "composition": "visual composition analysis"
+                  },
+                  "content_analysis": {
+                    "activities": ["what's happening in detail"],
+                    "emotions": ["emotions conveyed"],
+                    "story_potential": "narrative potential score 1-10",
+                    "engagement_hooks": ["specific engagement elements"]
+                  },
+                  "viral_potential": {
+                    "viral_score": "score 1-10 with reasoning",
+                    "trending_elements": ["elements that could trend"],
+                    "shareability_factors": ["why people would share"],
+                    "meme_potential": "meme creation potential 1-10"
+                  },
+                  "platform_optimization": {
+                    "tiktok_potential": "optimization score 1-10",
+                    "instagram_potential": "optimization score 1-10", 
+                    "youtube_potential": "optimization score 1-10",
+                    "facebook_potential": "optimization score 1-10"
+                  },
+                  "content_strategy": {
+                    "target_audience": "detailed audience description",
+                    "content_pillars": ["main content themes"],
+                    "call_to_action_suggestions": ["specific CTAs"],
+                    "hashtag_strategy": ["strategic hashtag categories"]
+                  },
+                  "technical_quality": {
+                    "video_quality": "quality assessment",
+                    "audio_potential": "estimated audio quality",
+                    "editing_suggestions": ["improvement suggestions"]
+                  }
+                }
                 """
             else:
                 prompt = """
-                Anda adalah seorang jenius marketing viral dan ahli strategi konten YouTube Shorts. Tugas Anda adalah menganalisis input yang diberikan (frame visual dan mungkin transkripsi audio) untuk membuat metadata yang sangat menarik.
+                Anda adalah AI content strategist canggih yang didukung Gemini 2.0-flash. Analisis frame video ini untuk membuat konten media sosial yang viral.
 
-                Berikan respons HANYA dalam format JSON yang valid dengan kunci-kunci berikut:
-                "objects": Array objek/subjek utama dalam video
-                "activities": Array aktivitas yang terjadi
-                "setting": Setting/lingkungan (indoor/outdoor, jenis lokasi)
-                "mood": Suasana/emosi yang disampaikan
-                "colors": Warna-warna dominan
-                "style": Gaya visual dan kualitas
-                "viral_score": Potensi viral (skala 1-10)
-                "target_audience": Deskripsi target audience
-                "content_type": Klasifikasi jenis konten
-                "trending_elements": Elemen yang bisa membuat trending
-                "optimization_tips": Tips optimasi yang actionable
-                "engagement_potential": Penilaian potensi engagement
-                "platforms": Platform terbaik untuk konten ini
-                "angles": Sudut konten yang disarankan
+                REQUIREMENTS ANALISIS LANJUTAN:
+                1. Pemahaman visual mendalam tentang scene, objek, orang, emosi
+                2. Kesadaran konteks dan potensi storytelling
+                3. Prediksi trend viral dan optimasi engagement
+                4. Adaptasi konten spesifik platform
+                5. Analisis psikologi dan perilaku audience
+
+                Berikan respons dalam format JSON SEMPURNA dengan keys yang ditingkatkan:
+                {
+                  "elemen_visual": {
+                    "subjek_utama": ["daftar subjek/orang utama"],
+                    "objek": ["objek detail dalam scene"],
+                    "setting": "deskripsi environment detail",
+                    "pencahayaan": "kualitas lighting dan mood",
+                    "komposisi": "analisis komposisi visual"
+                  },
+                  "analisis_konten": {
+                    "aktivitas": ["apa yang terjadi secara detail"],
+                    "emosi": ["emosi yang disampaikan"],
+                    "potensi_cerita": "skor potensi narasi 1-10",
+                    "engagement_hooks": ["elemen engagement spesifik"]
+                  },
+                  "potensi_viral": {
+                    "skor_viral": "skor 1-10 dengan alasan",
+                    "elemen_trending": ["elemen yang bisa trending"],
+                    "faktor_shareability": ["mengapa orang akan share"],
+                    "potensi_meme": "potensi pembuatan meme 1-10"
+                  },
+                  "optimasi_platform": {
+                    "potensi_tiktok": "skor optimasi 1-10",
+                    "potensi_instagram": "skor optimasi 1-10",
+                    "potensi_youtube": "skor optimasi 1-10", 
+                    "potensi_facebook": "skor optimasi 1-10"
+                  },
+                  "strategi_konten": {
+                    "target_audience": "deskripsi audience detail",
+                    "pilar_konten": ["tema konten utama"],
+                    "saran_call_to_action": ["CTA spesifik"],
+                    "strategi_hashtag": ["kategori hashtag strategis"]
+                  },
+                  "kualitas_teknis": {
+                    "kualitas_video": "penilaian kualitas",
+                    "potensi_audio": "estimasi kualitas audio",
+                    "saran_editing": ["saran perbaikan"]
+                  }
+                }
                 """
             
-            response = self.vision_model.generate_content([prompt, image])
+            # Use Gemini 2.0-flash advanced multi-modal capabilities
+            response = self.vision_model.generate_content([prompt] + images)
             
             # Parse response
             try:
@@ -281,57 +345,101 @@ class GeminiAIAssistant:
                 
                 analysis = json.loads(json_text)
                 
-                self._log(f"✅ Video analysis dengan Gemini 2.0-flash selesai", "SUCCESS")
+                self._log(f"🎯 Advanced video analysis dengan Gemini 2.0-flash selesai", "SUCCESS")
                 return analysis
                 
             except json.JSONDecodeError:
-                self._log("Error parsing AI response, using fallback", "WARNING")
-                return self._generate_fallback_analysis(video_path, language)
+                self._log("Error parsing AI response, using enhanced fallback", "WARNING")
+                return self._generate_enhanced_fallback_analysis(video_path, language)
                 
         except Exception as e:
             self._log(f"Error analyzing video: {e}", "ERROR")
-            return self._generate_fallback_analysis(video_path, language)
+            return self._generate_enhanced_fallback_analysis(video_path, language)
 
-    def _generate_fallback_analysis(self, video_path: str, language: str = "indonesian") -> Dict[str, Any]:
-        """Generate fallback analysis jika AI tidak tersedia"""
+    def _generate_enhanced_fallback_analysis(self, video_path: str, language: str = "indonesian") -> Dict[str, Any]:
+        """Generate enhanced fallback analysis untuk Gemini 2.0-flash"""
         if language == "english":
             return {
-                "objects": ["video content"],
-                "activities": ["unknown activity"],
-                "setting": "unknown",
-                "mood": "neutral",
-                "colors": ["mixed"],
-                "style": "standard",
-                "viral_score": 7,
-                "target_audience": "general audience",
-                "content_type": "entertainment",
-                "trending_elements": ["engaging visuals"],
-                "optimization_tips": ["add trending hashtags", "optimize for mobile"],
-                "engagement_potential": "moderate",
-                "platforms": ["tiktok", "instagram", "youtube", "facebook"],
-                "angles": ["entertaining", "engaging", "shareable"]
+                "visual_elements": {
+                    "main_subjects": ["video content"],
+                    "objects": ["various objects"],
+                    "setting": "unknown environment",
+                    "lighting": "standard lighting",
+                    "composition": "standard composition"
+                },
+                "content_analysis": {
+                    "activities": ["unknown activity"],
+                    "emotions": ["neutral"],
+                    "story_potential": 7,
+                    "engagement_hooks": ["visual content", "interesting moments"]
+                },
+                "viral_potential": {
+                    "viral_score": "7 - good potential with optimization",
+                    "trending_elements": ["engaging visuals", "shareable content"],
+                    "shareability_factors": ["interesting content", "good quality"],
+                    "meme_potential": 6
+                },
+                "platform_optimization": {
+                    "tiktok_potential": 8,
+                    "instagram_potential": 7,
+                    "youtube_potential": 7,
+                    "facebook_potential": 6
+                },
+                "content_strategy": {
+                    "target_audience": "general social media users",
+                    "content_pillars": ["entertainment", "engagement"],
+                    "call_to_action_suggestions": ["like and share", "comment below"],
+                    "hashtag_strategy": ["trending", "viral", "content"]
+                },
+                "technical_quality": {
+                    "video_quality": "good",
+                    "audio_potential": "standard",
+                    "editing_suggestions": ["add trending music", "optimize for mobile"]
+                }
             }
         else:
             return {
-                "objects": ["konten video"],
-                "activities": ["aktivitas tidak diketahui"],
-                "setting": "tidak diketahui",
-                "mood": "netral",
-                "colors": ["campuran"],
-                "style": "standar",
-                "viral_score": 7,
-                "target_audience": "audience umum",
-                "content_type": "hiburan",
-                "trending_elements": ["visual menarik"],
-                "optimization_tips": ["tambahkan hashtag trending", "optimasi untuk mobile"],
-                "engagement_potential": "sedang",
-                "platforms": ["tiktok", "instagram", "youtube", "facebook"],
-                "angles": ["menghibur", "menarik", "shareable"]
+                "elemen_visual": {
+                    "subjek_utama": ["konten video"],
+                    "objek": ["berbagai objek"],
+                    "setting": "lingkungan tidak diketahui",
+                    "pencahayaan": "pencahayaan standar",
+                    "komposisi": "komposisi standar"
+                },
+                "analisis_konten": {
+                    "aktivitas": ["aktivitas tidak diketahui"],
+                    "emosi": ["netral"],
+                    "potensi_cerita": 7,
+                    "engagement_hooks": ["konten visual", "momen menarik"]
+                },
+                "potensi_viral": {
+                    "skor_viral": "7 - potensi bagus dengan optimasi",
+                    "elemen_trending": ["visual menarik", "konten shareable"],
+                    "faktor_shareability": ["konten menarik", "kualitas bagus"],
+                    "potensi_meme": 6
+                },
+                "optimasi_platform": {
+                    "potensi_tiktok": 8,
+                    "potensi_instagram": 7,
+                    "potensi_youtube": 7,
+                    "potensi_facebook": 6
+                },
+                "strategi_konten": {
+                    "target_audience": "pengguna media sosial umum",
+                    "pilar_konten": ["hiburan", "engagement"],
+                    "saran_call_to_action": ["like dan share", "komentar di bawah"],
+                    "strategi_hashtag": ["trending", "viral", "konten"]
+                },
+                "kualitas_teknis": {
+                    "kualitas_video": "bagus",
+                    "potensi_audio": "standar",
+                    "saran_editing": ["tambah musik trending", "optimasi untuk mobile"]
+                }
             }
 
     def generate_platform_content(self, analysis: Dict[str, Any], platforms: List[str], 
                                 language: str = "indonesian") -> Dict[str, Any]:
-        """Generate content untuk setiap platform berdasarkan analysis dengan language support"""
+        """Generate content untuk setiap platform menggunakan Gemini 2.0-flash advanced capabilities"""
         if not self.model:
             return self._generate_fallback_content(platforms, language)
         
@@ -339,58 +447,150 @@ class GeminiAIAssistant:
             content = {}
             
             for platform in platforms:
-                self._log(f"🤖 Generating content untuk {platform}...", "AI")
+                self._log(f"🚀 Generating advanced content untuk {platform} dengan Gemini 2.0-flash...", "AI")
                 
-                # Enhanced prompt dengan language support
+                # Enhanced prompt untuk Gemini 2.0-flash dengan advanced content generation
                 if language == "english":
                     prompt = f"""
-                    You are a viral marketing genius and expert {platform} strategist. Create highly engaging content for {platform} based on this video analysis:
+                    You are a viral content creation expert powered by Gemini 2.0-flash. Create highly engaging, platform-optimized content for {platform} based on this advanced video analysis:
+                    
                     {json.dumps(analysis, indent=2)}
 
-                    Generate content optimized for {platform} with these requirements:
+                    ADVANCED CONTENT GENERATION FOR {platform.upper()}:
 
-                    Platform-specific requirements:
-                    - TikTok: Viral, trendy, youth-focused, max 150 chars title
-                    - Instagram: Aesthetic, visual, lifestyle, max 125 chars title  
-                    - YouTube: SEO-optimized, searchable, max 100 chars title
-                    - Facebook: Community-focused, shareable, max 255 chars title
+                    Platform-specific optimization:
+                    - TikTok: Viral hooks, trending sounds, youth slang, 15-60s optimization
+                    - Instagram: Aesthetic appeal, story-worthy, lifestyle integration
+                    - YouTube: SEO optimization, retention hooks, algorithm-friendly
+                    - Facebook: Community engagement, discussion starters, shareability
 
-                    Provide response ONLY in valid JSON format with these keys:
-                    "title_options": Array of 3 engaging title options:
-                        1. "Positive Clickbait" style
-                        2. Question format
-                        3. Descriptive but mysterious style
-                    "description": Short description (1-2 sentences)
-                    "tags": Array of 10-15 relevant tags (without '#' character)
-                    "thumbnail_suggestion": Short description of best thumbnail concept
-                    "caption_suggestion": ONE short caption suggestion (max 10-12 words) for the video, without hashtags (#) or other symbols
-                    "cta": Call-to-action appropriate for platform
-                    "best_time": Best posting time suggestion
+                    GENERATE PERFECT JSON with these enhanced keys:
+                    {{
+                      "title_variations": [
+                        {{
+                          "type": "viral_hook",
+                          "title": "attention-grabbing viral title",
+                          "hook_type": "curiosity/shock/emotion"
+                        }},
+                        {{
+                          "type": "question_format", 
+                          "title": "engaging question title",
+                          "engagement_trigger": "specific trigger"
+                        }},
+                        {{
+                          "type": "trending_format",
+                          "title": "trending format title", 
+                          "trend_element": "current trend used"
+                        }}
+                      ],
+                      "description_options": [
+                        {{
+                          "type": "storytelling",
+                          "content": "narrative-driven description",
+                          "story_arc": "beginning-middle-end structure"
+                        }},
+                        {{
+                          "type": "educational",
+                          "content": "value-providing description",
+                          "learning_outcome": "what viewers learn"
+                        }},
+                        {{
+                          "type": "entertainment",
+                          "content": "fun and engaging description",
+                          "entertainment_value": "why it's entertaining"
+                        }}
+                      ],
+                      "hashtag_strategy": {{
+                        "trending_hashtags": ["current trending tags"],
+                        "niche_hashtags": ["specific niche tags"],
+                        "branded_hashtags": ["potential brand tags"],
+                        "location_hashtags": ["location-based tags"],
+                        "optimal_count": "recommended number for platform"
+                      }},
+                      "engagement_optimization": {{
+                        "hook_timing": "when to place hook (seconds)",
+                        "cta_placement": "optimal CTA placement",
+                        "interaction_triggers": ["specific engagement triggers"],
+                        "retention_tactics": ["keep viewers watching"]
+                      }},
+                      "viral_elements": {{
+                        "trending_sounds": ["suggested trending audio"],
+                        "visual_effects": ["recommended effects"],
+                        "editing_style": "optimal editing approach",
+                        "posting_strategy": "best time and frequency"
+                      }}
+                    }}
                     """
                 else:
                     prompt = f"""
-                    Anda adalah seorang jenius marketing viral dan ahli strategi konten {platform}. Buat konten yang sangat menarik untuk {platform} berdasarkan analisis video ini:
+                    Anda adalah expert pembuatan konten viral yang didukung Gemini 2.0-flash. Buat konten yang sangat engaging dan dioptimasi untuk {platform} berdasarkan analisis video lanjutan ini:
+                    
                     {json.dumps(analysis, indent=2)}
 
-                    Generate konten yang dioptimasi untuk {platform} dengan requirements ini:
+                    GENERASI KONTEN LANJUTAN UNTUK {platform.upper()}:
 
-                    Requirements spesifik platform:
-                    - TikTok: Viral, trendy, youth-focused, max 150 karakter judul
-                    - Instagram: Aesthetic, visual, lifestyle, max 125 karakter judul  
-                    - YouTube: SEO-optimized, searchable, max 100 karakter judul
-                    - Facebook: Community-focused, shareable, max 255 karakter judul
+                    Optimasi spesifik platform:
+                    - TikTok: Hook viral, trending sounds, bahasa anak muda, optimasi 15-60s
+                    - Instagram: Daya tarik estetik, story-worthy, integrasi lifestyle
+                    - YouTube: Optimasi SEO, retention hooks, algorithm-friendly
+                    - Facebook: Community engagement, discussion starters, shareability
 
-                    Berikan respons HANYA dalam format JSON yang valid dengan kunci-kunci berikut:
-                    "title_options": Array berisi 3 opsi judul yang menarik:
-                        1. Gaya "Clickbait Positif"
-                        2. Berbentuk pertanyaan
-                        3. Gaya deskriptif tapi misterius
-                    "description": Deskripsi singkat (1-2 kalimat)
-                    "tags": Array berisi 10-15 tag yang relevan (tanpa karakter '#')
-                    "thumbnail_suggestion": Deskripsi singkat konsep thumbnail terbaik
-                    "caption_suggestion": SATU saran caption singkat (maksimal 10-12 kata) untuk di video, tanpa hashtag (#) atau yang lainnya
-                    "cta": Call-to-action yang sesuai platform
-                    "best_time": Saran waktu posting terbaik
+                    GENERATE JSON SEMPURNA dengan keys yang ditingkatkan:
+                    {{
+                      "variasi_judul": [
+                        {{
+                          "tipe": "viral_hook",
+                          "judul": "judul viral yang menarik perhatian",
+                          "tipe_hook": "curiosity/shock/emotion"
+                        }},
+                        {{
+                          "tipe": "format_pertanyaan",
+                          "judul": "judul pertanyaan yang engaging", 
+                          "trigger_engagement": "trigger spesifik"
+                        }},
+                        {{
+                          "tipe": "format_trending",
+                          "judul": "judul format trending",
+                          "elemen_trend": "trend terkini yang digunakan"
+                        }}
+                      ],
+                      "opsi_deskripsi": [
+                        {{
+                          "tipe": "storytelling",
+                          "konten": "deskripsi berbasis narasi",
+                          "alur_cerita": "struktur awal-tengah-akhir"
+                        }},
+                        {{
+                          "tipe": "edukatif",
+                          "konten": "deskripsi yang memberikan value",
+                          "hasil_pembelajaran": "apa yang dipelajari viewer"
+                        }},
+                        {{
+                          "tipe": "hiburan",
+                          "konten": "deskripsi fun dan engaging",
+                          "nilai_hiburan": "mengapa menghibur"
+                        }}
+                      ],
+                      "strategi_hashtag": {{
+                        "hashtag_trending": ["tag trending saat ini"],
+                        "hashtag_niche": ["tag niche spesifik"],
+                        "hashtag_branded": ["potential brand tags"],
+                        "hashtag_lokasi": ["tag berbasis lokasi"],
+                        "jumlah_optimal": "jumlah yang direkomendasikan untuk platform"
+                      }},
+                      "optimasi_engagement": {{
+                        "timing_hook": "kapan menempatkan hook (detik)",
+                        "penempatan_cta": "penempatan CTA optimal",
+                        "trigger_interaksi": ["trigger engagement spesifik"],
+                        "taktik_retention": ["menjaga viewer tetap menonton"]
+                      }},
+                      "elemen_viral": {{
+                        "trending_sounds": ["audio trending yang disarankan"],
+                        "efek_visual": ["efek yang direkomendasikan"],
+                        "gaya_editing": "pendekatan editing optimal",
+                        "strategi_posting": "waktu dan frekuensi terbaik"
+                      }}
+                    }}
                     """
                 
                 try:
@@ -412,7 +612,7 @@ class GeminiAIAssistant:
                     self._log(f"Error generating content for {platform}: {e}", "WARNING")
                     content[platform] = self._generate_fallback_platform_content(platform, language)
             
-            self._log(f"✅ Content generation dengan Gemini 2.0-flash selesai", "SUCCESS")
+            self._log(f"🎯 Advanced content generation dengan Gemini 2.0-flash selesai", "SUCCESS")
             return content
             
         except Exception as e:
@@ -431,155 +631,153 @@ class GeminiAIAssistant:
         if language == "english":
             base_content = {
                 "tiktok": {
-                    "title_options": [
-                        "This Video Will Blow Your Mind! 🔥",
-                        "Why Is Everyone Talking About This?",
-                        "The Secret They Don't Want You to Know..."
+                    "title_variations": [
+                        {"type": "viral_hook", "title": "This Video Will Blow Your Mind! 🔥", "hook_type": "curiosity"},
+                        {"type": "question_format", "title": "Why Is Everyone Talking About This?", "engagement_trigger": "curiosity"},
+                        {"type": "trending_format", "title": "POV: You Discover This Amazing Thing", "trend_element": "POV format"}
                     ],
-                    "description": "Amazing content that will change your perspective! Tag someone who needs to see this.",
-                    "tags": ["viral", "trending", "fyp", "amazing", "wow", "mindblowing", "tiktok", "video", "content", "entertainment"],
-                    "thumbnail_suggestion": "Bright, eye-catching thumbnail with surprised expression",
-                    "caption_suggestion": "Wait for the plot twist at the end!",
-                    "cta": "Follow for more amazing content!",
-                    "best_time": "7:00-9:00 PM"
-                },
-                "instagram": {
-                    "title_options": [
-                        "Content That Will Change Your Life! ✨",
-                        "Have You Seen This Incredible Thing?",
-                        "The Story Behind This Amazing Moment..."
+                    "description_options": [
+                        {"type": "storytelling", "content": "Amazing content that will change your perspective! Tag someone who needs to see this.", "story_arc": "discovery-revelation-impact"},
+                        {"type": "educational", "content": "Learn something new today with this incredible content!", "learning_outcome": "new knowledge"},
+                        {"type": "entertainment", "content": "Pure entertainment that will make your day better!", "entertainment_value": "mood boost"}
                     ],
-                    "description": "Incredible content you need to see! Save this post and share with your friends.",
-                    "tags": ["viral", "instagram", "reels", "amazing", "content", "trending", "lifestyle", "inspiration", "wow", "incredible"],
-                    "thumbnail_suggestion": "Aesthetic, high-quality thumbnail with good lighting",
-                    "caption_suggestion": "This moment changed everything for me",
-                    "cta": "Save and share to your story!",
-                    "best_time": "8:00-10:00 PM"
-                },
-                "youtube": {
-                    "title_options": [
-                        "This Video Will Surprise You!",
-                        "What Happens Next Will Shock You",
-                        "The Truth About This Amazing Content"
-                    ],
-                    "description": "Watch this incredible video until the end! Don't forget to subscribe, like, and share.",
-                    "tags": ["Shorts", "viral", "amazing", "youtube", "trending", "incredible", "wow", "mindblowing", "content", "video"],
-                    "thumbnail_suggestion": "High-contrast thumbnail with clear focal point",
-                    "caption_suggestion": "Subscribe for more amazing content like this!",
-                    "cta": "Subscribe for more amazing videos!",
-                    "best_time": "6:00-8:00 PM"
-                },
-                "facebook": {
-                    "title_options": [
-                        "Amazing Video That Everyone Is Sharing!",
-                        "Have You Seen This Incredible Content?",
-                        "The Video That's Breaking the Internet..."
-                    ],
-                    "description": "This incredible video is going viral! Share it with your friends and family.",
-                    "tags": ["viral", "amazing", "video", "facebook", "reels", "incredible", "wow", "trending", "share", "community"],
-                    "thumbnail_suggestion": "Community-friendly thumbnail that encourages sharing",
-                    "caption_suggestion": "Share this with someone who needs to see it!",
-                    "cta": "Share with your friends!",
-                    "best_time": "7:00-9:00 PM"
+                    "hashtag_strategy": {
+                        "trending_hashtags": ["#fyp", "#viral", "#trending"],
+                        "niche_hashtags": ["#amazing", "#wow", "#mindblowing"],
+                        "branded_hashtags": ["#tiktok", "#video"],
+                        "location_hashtags": ["#worldwide"],
+                        "optimal_count": "5-8 hashtags"
+                    }
                 }
             }
         else:
             base_content = {
                 "tiktok": {
-                    "title_options": [
-                        "Video Viral yang Bikin Jutaan Views! 🔥",
-                        "Kenapa Video Ini Bisa Trending #1?",
-                        "Plot Twist yang Nggak Akan Kamu Sangka..."
+                    "variasi_judul": [
+                        {"tipe": "viral_hook", "judul": "Video Viral yang Bikin Jutaan Views! 🔥", "tipe_hook": "curiosity"},
+                        {"tipe": "format_pertanyaan", "judul": "Kenapa Video Ini Bisa Trending #1?", "trigger_engagement": "curiosity"},
+                        {"tipe": "format_trending", "judul": "POV: Kamu Nemuin Hal Amazing Ini", "elemen_trend": "POV format"}
                     ],
-                    "description": "Konten amazing yang akan mengubah perspektif kamu! Tag bestie yang perlu lihat ini.",
-                    "tags": ["viral", "trending", "fyp", "amazing", "wow", "keren", "tiktok", "video", "konten", "hiburan"],
-                    "thumbnail_suggestion": "Thumbnail cerah dan eye-catching dengan ekspresi terkejut",
-                    "caption_suggestion": "Tunggu plot twist di akhir video!",
-                    "cta": "Follow untuk konten amazing lainnya!",
-                    "best_time": "19:00-21:00"
-                },
-                "instagram": {
-                    "title_options": [
-                        "Konten yang Akan Mengubah Hidupmu! ✨",
-                        "Udah Lihat yang Incredible Ini Belum?",
-                        "Cerita di Balik Momen Amazing Ini..."
+                    "opsi_deskripsi": [
+                        {"tipe": "storytelling", "konten": "Konten amazing yang akan mengubah perspektif kamu! Tag bestie yang perlu lihat ini.", "alur_cerita": "penemuan-revelasi-dampak"},
+                        {"tipe": "edukatif", "konten": "Belajar hal baru hari ini dengan konten incredible ini!", "hasil_pembelajaran": "pengetahuan baru"},
+                        {"tipe": "hiburan", "konten": "Hiburan murni yang akan membuat hari kamu lebih baik!", "nilai_hiburan": "mood boost"}
                     ],
-                    "description": "Konten incredible yang wajib kamu lihat! Save post ini dan share ke teman-teman kamu.",
-                    "tags": ["viral", "instagram", "reels", "amazing", "konten", "trending", "lifestyle", "inspirasi", "wow", "incredible"],
-                    "thumbnail_suggestion": "Thumbnail aesthetic berkualitas tinggi dengan pencahayaan bagus",
-                    "caption_suggestion": "Momen ini mengubah segalanya untukku",
-                    "cta": "Save dan share ke story kamu!",
-                    "best_time": "20:00-22:00"
-                },
-                "youtube": {
-                    "title_options": [
-                        "Video Ini Akan Mengejutkan Kamu!",
-                        "Yang Terjadi Selanjutnya Bikin Shock",
-                        "Fakta Mengejutkan di Balik Konten Ini"
-                    ],
-                    "description": "Tonton video incredible ini sampai habis! Jangan lupa subscribe, like, dan share.",
-                    "tags": ["Shorts", "viral", "amazing", "youtube", "trending", "incredible", "wow", "mengejutkan", "konten", "video"],
-                    "thumbnail_suggestion": "Thumbnail kontras tinggi dengan focal point yang jelas",
-                    "caption_suggestion": "Subscribe untuk konten amazing lainnya!",
-                    "cta": "Subscribe untuk video amazing lainnya!",
-                    "best_time": "18:00-20:00"
-                },
-                "facebook": {
-                    "title_options": [
-                        "Video Amazing yang Lagi Viral Banget!",
-                        "Udah Lihat Konten Incredible Ini Belum?",
-                        "Video yang Lagi Heboh di Internet..."
-                    ],
-                    "description": "Video incredible ini lagi viral! Share ke teman dan keluarga kamu.",
-                    "tags": ["viral", "amazing", "video", "facebook", "reels", "incredible", "wow", "trending", "share", "komunitas"],
-                    "thumbnail_suggestion": "Thumbnail yang community-friendly dan mendorong sharing",
-                    "caption_suggestion": "Share ini ke yang perlu lihat!",
-                    "cta": "Share ke teman-teman kamu!",
-                    "best_time": "19:00-21:00"
+                    "strategi_hashtag": {
+                        "hashtag_trending": ["#fyp", "#viral", "#trending"],
+                        "hashtag_niche": ["#amazing", "#wow", "#keren"],
+                        "hashtag_branded": ["#tiktok", "#video"],
+                        "hashtag_lokasi": ["#indonesia"],
+                        "jumlah_optimal": "5-8 hashtag"
+                    }
                 }
             }
         
         return base_content.get(platform, base_content["tiktok"])
 
     def generate_text_post(self, topic: str, platform: str, language: str = "indonesian") -> Dict[str, Any]:
-        """Generate text post berdasarkan topik dengan language support"""
+        """Generate text post berdasarkan topik menggunakan Gemini 2.0-flash"""
         if not self.model:
             return self._generate_fallback_text_post(topic, platform, language)
         
         try:
-            self._log(f"🤖 Generating text post untuk {platform} dengan topik: {topic}", "AI")
+            self._log(f"🚀 Generating advanced text post untuk {platform} dengan Gemini 2.0-flash...", "AI")
             
             if language == "english":
                 prompt = f"""
-                You are a viral marketing genius and expert {platform} strategist. Create an engaging text post for {platform} about: {topic}
+                You are a viral content strategist powered by Gemini 2.0-flash. Create an engaging text post for {platform} about: {topic}
+
+                ADVANCED TEXT POST GENERATION:
 
                 Platform guidelines:
-                - TikTok: Casual, trendy, youth-focused
-                - Instagram: Aesthetic, lifestyle, visual
-                - YouTube: Informative, searchable, community
-                - Facebook: Conversational, community-focused
+                - TikTok: Casual, trendy, youth-focused, hook-driven
+                - Instagram: Aesthetic, lifestyle, visual storytelling
+                - YouTube: Informative, searchable, community-building
+                - Facebook: Conversational, community-focused, discussion-starter
 
-                Provide response ONLY in valid JSON format with these keys:
-                "title": Engaging title
-                "content": Main post content
-                "hashtags": Relevant hashtags (without '#' character)
-                "cta": Call-to-action
+                Generate PERFECT JSON with enhanced structure:
+                {{
+                  "content_variations": [
+                    {{
+                      "style": "viral_hook",
+                      "content": "attention-grabbing content with hook",
+                      "engagement_factor": "why it's engaging"
+                    }},
+                    {{
+                      "style": "storytelling", 
+                      "content": "narrative-driven content",
+                      "story_element": "story component used"
+                    }},
+                    {{
+                      "style": "educational",
+                      "content": "value-providing content",
+                      "value_proposition": "what value it provides"
+                    }}
+                  ],
+                  "hashtag_strategy": {{
+                    "primary_hashtags": ["main topic hashtags"],
+                    "trending_hashtags": ["current trending hashtags"],
+                    "engagement_hashtags": ["hashtags that drive engagement"]
+                  }},
+                  "call_to_action": {{
+                    "primary_cta": "main call to action",
+                    "secondary_cta": "backup call to action",
+                    "engagement_type": "type of engagement expected"
+                  }},
+                  "optimization_tips": {{
+                    "best_posting_time": "optimal posting time",
+                    "engagement_tactics": ["specific tactics to boost engagement"],
+                    "viral_potential": "viral potential score 1-10"
+                  }}
+                }}
                 """
             else:
                 prompt = f"""
-                Anda adalah seorang jenius marketing viral dan ahli strategi konten {platform}. Buat text post yang menarik untuk {platform} tentang: {topic}
+                Anda adalah viral content strategist yang didukung Gemini 2.0-flash. Buat text post yang engaging untuk {platform} tentang: {topic}
+
+                GENERASI TEXT POST LANJUTAN:
 
                 Panduan platform:
-                - TikTok: Casual, trendy, youth-focused
-                - Instagram: Aesthetic, lifestyle, visual
-                - YouTube: Informatif, searchable, community
-                - Facebook: Conversational, community-focused
+                - TikTok: Casual, trendy, youth-focused, hook-driven
+                - Instagram: Aesthetic, lifestyle, visual storytelling
+                - YouTube: Informatif, searchable, community-building
+                - Facebook: Conversational, community-focused, discussion-starter
 
-                Berikan respons HANYA dalam format JSON yang valid dengan kunci-kunci berikut:
-                "title": Judul yang menarik
-                "content": Konten post utama
-                "hashtags": Hashtag yang relevan (tanpa karakter '#')
-                "cta": Call-to-action
+                Generate JSON SEMPURNA dengan struktur yang ditingkatkan:
+                {{
+                  "variasi_konten": [
+                    {{
+                      "gaya": "viral_hook",
+                      "konten": "konten menarik perhatian dengan hook",
+                      "faktor_engagement": "mengapa engaging"
+                    }},
+                    {{
+                      "gaya": "storytelling",
+                      "konten": "konten berbasis narasi", 
+                      "elemen_cerita": "komponen cerita yang digunakan"
+                    }},
+                    {{
+                      "gaya": "edukatif",
+                      "konten": "konten yang memberikan value",
+                      "proposisi_nilai": "value apa yang diberikan"
+                    }}
+                  ],
+                  "strategi_hashtag": {{
+                    "hashtag_utama": ["hashtag topik utama"],
+                    "hashtag_trending": ["hashtag trending saat ini"],
+                    "hashtag_engagement": ["hashtag yang mendorong engagement"]
+                  }},
+                  "call_to_action": {{
+                    "cta_utama": "call to action utama",
+                    "cta_sekunder": "call to action cadangan",
+                    "tipe_engagement": "jenis engagement yang diharapkan"
+                  }},
+                  "tips_optimasi": {{
+                    "waktu_posting_terbaik": "waktu posting optimal",
+                    "taktik_engagement": ["taktik spesifik untuk boost engagement"],
+                    "potensi_viral": "skor potensi viral 1-10"
+                  }}
+                }}
                 """
             
             response = self.model.generate_content(prompt)
@@ -595,7 +793,7 @@ class GeminiAIAssistant:
             
             post_content = json.loads(json_text)
             
-            self._log(f"✅ Text post generation dengan Gemini 2.0-flash selesai", "SUCCESS")
+            self._log(f"🎯 Advanced text post generation dengan Gemini 2.0-flash selesai", "SUCCESS")
             return post_content
             
         except Exception as e:
@@ -606,21 +804,47 @@ class GeminiAIAssistant:
         """Generate fallback text post dengan language support"""
         if language == "english":
             return {
-                "title": f"Amazing Tips About {topic} You Need to Know!",
-                "content": f"Check out these incredible tips about {topic}! This will definitely change your perspective. Share your experience in the comments!",
-                "hashtags": f"tips {topic.replace(' ', '')} viral trending {platform}",
-                "cta": "Share your experience in the comments!"
+                "content_variations": [
+                    {
+                        "style": "viral_hook",
+                        "content": f"🔥 Amazing tips about {topic} you need to know! This will definitely change your perspective. Share your experience in the comments!",
+                        "engagement_factor": "curiosity and value"
+                    }
+                ],
+                "hashtag_strategy": {
+                    "primary_hashtags": [f"#{topic.replace(' ', '')}", "#tips", "#amazing"],
+                    "trending_hashtags": ["#viral", "#trending"],
+                    "engagement_hashtags": ["#share", "#comment"]
+                },
+                "call_to_action": {
+                    "primary_cta": "Share your experience in the comments!",
+                    "secondary_cta": "Tag someone who needs to see this!",
+                    "engagement_type": "comments and shares"
+                }
             }
         else:
             return {
-                "title": f"Tips {topic} yang Wajib Diketahui!",
-                "content": f"Simak tips {topic} yang sangat berguna ini! Pasti akan mengubah perspektif kamu. Share pengalaman kamu di komentar!",
-                "hashtags": f"tips {topic.replace(' ', '')} viral trending {platform}",
-                "cta": "Share pengalaman kamu di komentar!"
+                "variasi_konten": [
+                    {
+                        "gaya": "viral_hook", 
+                        "konten": f"🔥 Tips {topic} yang wajib diketahui! Pasti akan mengubah perspektif kamu. Share pengalaman kamu di komentar!",
+                        "faktor_engagement": "curiosity dan value"
+                    }
+                ],
+                "strategi_hashtag": {
+                    "hashtag_utama": [f"#{topic.replace(' ', '')}", "#tips", "#amazing"],
+                    "hashtag_trending": ["#viral", "#trending"],
+                    "hashtag_engagement": ["#share", "#komentar"]
+                },
+                "call_to_action": {
+                    "cta_utama": "Share pengalaman kamu di komentar!",
+                    "cta_sekunder": "Tag yang perlu lihat ini!",
+                    "tipe_engagement": "komentar dan share"
+                }
             }
 
     def check_api_status(self) -> Dict[str, Any]:
-        """Check Gemini API status"""
+        """Check Gemini 2.0-flash API status"""
         if not GENAI_AVAILABLE:
             return {
                 "success": False,
@@ -639,14 +863,21 @@ class GeminiAIAssistant:
         try:
             genai.configure(api_key=api_key)
             
-            # Test with simple request
+            # Test with Gemini 2.0-flash
             model = genai.GenerativeModel('gemini-2.0-flash-exp')
-            response = model.generate_content("Test")
+            response = model.generate_content("Test connection")
             
             return {
                 "success": True,
                 "model": "gemini-2.0-flash-exp",
-                "message": "Gemini 2.0-flash API ready"
+                "message": "🚀 Gemini 2.0-flash API ready - Latest & Most Advanced Model!",
+                "capabilities": [
+                    "Advanced multi-modal understanding",
+                    "Enhanced content generation", 
+                    "Superior viral prediction",
+                    "Platform-specific optimization",
+                    "Advanced engagement analysis"
+                ]
             }
             
         except Exception as e:
@@ -658,7 +889,8 @@ class GeminiAIAssistant:
                 return {
                     "success": True,
                     "model": "gemini-pro",
-                    "message": "Gemini Pro API ready (fallback)"
+                    "message": "Gemini Pro API ready (fallback from 2.0-flash)",
+                    "note": "Upgrade to 2.0-flash for advanced features"
                 }
             except Exception as e2:
                 return {
@@ -679,7 +911,7 @@ class GeminiAIAssistant:
             self._log(f"Error cleaning temp files: {e}", "ERROR")
 
     def interactive_ai_menu(self):
-        """Interactive AI assistant menu"""
+        """Interactive AI assistant menu dengan Gemini 2.0-flash features"""
         if not GENAI_AVAILABLE:
             print(f"{Fore.RED}❌ google-generativeai tidak tersedia!")
             print(f"{Fore.YELLOW}Install dengan: pip install google-generativeai")
@@ -690,15 +922,17 @@ class GeminiAIAssistant:
             print(f"{Fore.YELLOW}Buat file .env dengan GEMINI_API_KEY=your_api_key")
             return
         
-        print(f"\n{Fore.LIGHTMAGENTA_EX}🤖 Gemini AI Assistant")
-        print("=" * 50)
+        print(f"\n{Fore.LIGHTMAGENTA_EX}🚀 Gemini 2.0-flash AI Assistant")
+        print("=" * 60)
+        print(f"{Fore.LIGHTCYAN_EX}🎯 Powered by Latest & Most Advanced AI Model")
+        print()
         
         while True:
             print(f"\n{Fore.YELLOW}Pilih aksi:")
-            print("1. 🎬 Analyze Video")
-            print("2. ✍️ Generate Text Post")
-            print("3. 📱 Generate Platform Content")
-            print("4. 🔍 Check API Status")
+            print("1. 🎬 Advanced Video Analysis")
+            print("2. ✍️ Enhanced Text Post Generation")
+            print("3. 📱 Multi-Platform Content Strategy")
+            print("4. 🔍 Check API Status & Capabilities")
             print("5. 🧹 Cleanup Temp Files")
             print("6. ❌ Keluar")
             
@@ -710,7 +944,7 @@ class GeminiAIAssistant:
                     language = "english" if input(f"{Fore.CYAN}Language (en/id): ").strip().lower() == "en" else "indonesian"
                     analysis = self.analyze_video_content(video_path, language)
                     
-                    print(f"\n{Fore.GREEN}📊 VIDEO ANALYSIS:")
+                    print(f"\n{Fore.GREEN}🎯 ADVANCED VIDEO ANALYSIS (Gemini 2.0-flash):")
                     print(json.dumps(analysis, indent=2, ensure_ascii=False))
                 else:
                     print(f"{Fore.RED}❌ File video tidak ditemukan!")
@@ -722,7 +956,7 @@ class GeminiAIAssistant:
                     language = "english" if input(f"{Fore.CYAN}Language (en/id): ").strip().lower() == "en" else "indonesian"
                     post = self.generate_text_post(topic, platform, language)
                     
-                    print(f"\n{Fore.GREEN}📝 GENERATED POST:")
+                    print(f"\n{Fore.GREEN}🎯 ENHANCED TEXT POST (Gemini 2.0-flash):")
                     print(json.dumps(post, indent=2, ensure_ascii=False))
                 else:
                     print(f"{Fore.RED}❌ Topik dan platform harus diisi!")
@@ -738,7 +972,7 @@ class GeminiAIAssistant:
                         analysis = self.analyze_video_content(video_path, language)
                         content = self.generate_platform_content(analysis, platforms, language)
                         
-                        print(f"\n{Fore.GREEN}🎯 GENERATED CONTENT:")
+                        print(f"\n{Fore.GREEN}🎯 MULTI-PLATFORM STRATEGY (Gemini 2.0-flash):")
                         print(json.dumps(content, indent=2, ensure_ascii=False))
                     else:
                         print(f"{Fore.RED}❌ Minimal satu platform harus dipilih!")
@@ -750,6 +984,10 @@ class GeminiAIAssistant:
                 if status["success"]:
                     print(f"{Fore.GREEN}✅ {status['message']}")
                     print(f"Model: {status['model']}")
+                    if "capabilities" in status:
+                        print(f"\n🚀 Advanced Capabilities:")
+                        for capability in status["capabilities"]:
+                            print(f"  • {capability}")
                 else:
                     print(f"{Fore.RED}❌ {status['message']}")
             
@@ -766,7 +1004,7 @@ class GeminiAIAssistant:
 
 def main():
     """Main function untuk CLI"""
-    parser = argparse.ArgumentParser(description="Gemini AI Assistant")
+    parser = argparse.ArgumentParser(description="Gemini 2.0-flash AI Assistant")
     parser.add_argument("--video", "-v", help="Path ke video untuk analisis")
     parser.add_argument("--topic", "-t", help="Topik untuk text post")
     parser.add_argument("--platform", "-p", help="Platform target")
@@ -789,6 +1027,10 @@ def main():
         if status["success"]:
             print(f"{Fore.GREEN}✅ {status['message']}")
             print(f"Model: {status['model']}")
+            if "capabilities" in status:
+                print(f"\n🚀 Advanced Capabilities:")
+                for capability in status["capabilities"]:
+                    print(f"  • {capability}")
         else:
             print(f"{Fore.RED}❌ {status['message']}")
         return
@@ -799,7 +1041,7 @@ def main():
             sys.exit(1)
         
         analysis = assistant.analyze_video_content(args.video, args.language)
-        print(f"\n{Fore.GREEN}📊 VIDEO ANALYSIS:")
+        print(f"\n{Fore.GREEN}🎯 ADVANCED VIDEO ANALYSIS (Gemini 2.0-flash):")
         print(json.dumps(analysis, indent=2, ensure_ascii=False))
         
         if args.platform:
@@ -810,7 +1052,7 @@ def main():
     
     elif args.topic and args.platform:
         post = assistant.generate_text_post(args.topic, args.platform, args.language)
-        print(f"\n{Fore.GREEN}📝 GENERATED POST:")
+        print(f"\n{Fore.GREEN}🎯 ENHANCED TEXT POST (Gemini 2.0-flash):")
         print(json.dumps(post, indent=2, ensure_ascii=False))
     
     else:
