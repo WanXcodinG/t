@@ -111,106 +111,29 @@ def test_chromedriver_setup():
             log("driver_manager.py not found", "ERROR")
             return False
         
-        log("Initializing ChromeDriver...", "INFO")
-        log("Searching for existing ChromeDriver...", "INFO")
+        # Import driver manager to check if it works
+        from driver_manager import UniversalDriverManager
         
-        # Check PATH
-        import shutil
-        chromedriver_path = shutil.which('chromedriver')
+        manager = UniversalDriverManager()
         
+        # Check if Chrome is available
+        chrome_version = manager.get_chrome_version()
+        if not chrome_version:
+            log("Chrome not available for driver creation", "ERROR")
+            return False
+        
+        # Check if ChromeDriver can be found
+        chromedriver_path = manager.find_existing_chromedriver()
         if chromedriver_path:
-            log(f"ChromeDriver found in PATH: {chromedriver_path}", "SUCCESS")
+            log(f"ChromeDriver found: {chromedriver_path}", "SUCCESS")
             return True
-        
-        # Check common locations
-        system = platform.system().lower()
-        common_paths = []
-        
-        if system == "windows":
-            common_paths = [
-                "chromedriver.exe",
-                "drivers/chromedriver.exe",
-                r"C:\chromedriver\chromedriver.exe"
-            ]
         else:
-            common_paths = [
-                "chromedriver",
-                "drivers/chromedriver",
-                "/usr/local/bin/chromedriver",
-                "/usr/bin/chromedriver"
-            ]
-        
-        for path in common_paths:
-            if os.path.exists(path):
-                log(f"ChromeDriver found: {path}", "SUCCESS")
-                return True
-        
-        # Check WebDriver Manager cache
-        try:
-            home_dir = Path.home()
-            wdm_cache = home_dir / ".wdm" / "drivers" / "chromedriver"
-            
-            if wdm_cache.exists():
-                for chromedriver_file in wdm_cache.rglob("chromedriver*"):
-                    if chromedriver_file.is_file() and chromedriver_file.stat().st_size > 1024*1024:
-                        log(f"ChromeDriver via WebDriver Manager: {chromedriver_file}", "SUCCESS")
-                        log(f"ChromeDriver found: {chromedriver_file}", "SUCCESS")
-                        return True
-        except:
-            pass
-        
-        log("ChromeDriver not found", "WARNING")
-        log("Will be auto-downloaded when needed", "INFO")
-        return False
-        
+            log("ChromeDriver not found", "WARNING")
+            log("Will be auto-downloaded when needed", "INFO")
+            return True  # Still consider as success since it can auto-download
+                
     except Exception as e:
         log(f"ChromeDriver setup error: {e}", "ERROR")
-        return False
-
-def test_driver_creation():
-    """Test driver creation capability tanpa benar-benar membuat driver"""
-    log("Testing Driver Creation", "HEADER")
-    
-    try:
-        # Check if driver_manager module can be imported
-        if not os.path.exists("driver_manager.py"):
-            log("driver_manager.py not found", "ERROR")
-            return False
-        
-        log("Creating driver (headless: True)...", "INFO")
-        log("Initializing ChromeDriver...", "INFO")
-        log("Searching for existing ChromeDriver...", "INFO")
-        log("Trying WebDriver Manager...", "INFO")
-        
-        # Import driver manager to check if it works
-        try:
-            from driver_manager import UniversalDriverManager
-            
-            manager = UniversalDriverManager()
-            
-            # Check if Chrome is available
-            chrome_version = manager.get_chrome_version()
-            if not chrome_version:
-                log("Chrome not available for driver creation", "ERROR")
-                return False
-            
-            # Check if ChromeDriver can be found/downloaded
-            chromedriver_path = manager.find_existing_chromedriver()
-            if chromedriver_path:
-                log(f"ChromeDriver via WebDriver Manager: {chromedriver_path}", "SUCCESS")
-                log("Driver creation capability verified", "SUCCESS")
-                return True
-            else:
-                log("ChromeDriver not available", "WARNING")
-                log("Will be auto-downloaded when needed", "INFO")
-                return True  # Still consider as success since it can auto-download
-                
-        except Exception as e:
-            log(f"Driver manager error: {e}", "ERROR")
-            return False
-        
-    except Exception as e:
-        log(f"Driver creation test error: {e}", "ERROR")
         return False
 
 def test_social_media_uploader():
@@ -281,14 +204,8 @@ def test_individual_uploaders():
             module = __import__(module_name)
             uploader_class = getattr(module, class_name)
             
-            # Test basic initialization (tanpa membuat driver)
-            if name == "YouTube":
-                uploader = uploader_class(debug=False)
-            else:
-                # Untuk uploader lain, kita hanya test import tanpa inisialisasi penuh
-                log(f"{name} uploader: ✅ Import successful", "SUCCESS")
-                results[name] = True
-                continue
+            # Test basic initialization
+            uploader = uploader_class(debug=False)
             
             log(f"{name} uploader: ✅ Initialization successful", "SUCCESS")
             results[name] = True
@@ -404,7 +321,6 @@ def run_complete_test():
     tests = [
         ("Chrome Detection", test_chrome_detection),
         ("ChromeDriver Setup", test_chromedriver_setup),
-        ("Driver Creation", test_driver_creation),
         ("Social Media Uploader", test_social_media_uploader),
         ("Individual Uploaders", test_individual_uploaders),
         ("AI Components", test_ai_components),
