@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Social Media Uploader - ENHANCED VERSION
+Social Media Uploader - SUPER ENHANCED VERSION
 Upload ke TikTok, Facebook, YouTube, Instagram dengan dukungan AI content generation,
 video enhancement, dan video downloader terintegrasi
 Support untuk FILE VIDEO LOKAL atau LINK VIDEO SOSMED untuk SEMUA pilihan
+Enhanced dengan Gemini 2.0-flash AI dan Language Support
 """
 
 import os
@@ -96,7 +97,8 @@ class SocialMediaUploader:
             "DEBUG": Fore.MAGENTA,
             "HEADER": Fore.LIGHTBLUE_EX,
             "PIPELINE": Fore.LIGHTMAGENTA_EX,
-            "DOWNLOAD": Fore.LIGHTBLUE_EX
+            "DOWNLOAD": Fore.LIGHTBLUE_EX,
+            "AI": Fore.LIGHTMAGENTA_EX
         }
         
         if level == "DEBUG" and not self.debug:
@@ -111,7 +113,8 @@ class SocialMediaUploader:
             "DEBUG": "🔍",
             "HEADER": "🚀",
             "PIPELINE": "⚙️",
-            "DOWNLOAD": "📥"
+            "DOWNLOAD": "📥",
+            "AI": "🤖"
         }
         
         icon = icons.get(level, "📝")
@@ -306,6 +309,21 @@ class SocialMediaUploader:
             self._log("Pilihan tidak valid!", "ERROR")
             return None, None, None
 
+    def get_ai_language_preference(self) -> str:
+        """Get user's language preference for AI content"""
+        print(f"\n{Fore.LIGHTMAGENTA_EX}🌍 PILIH BAHASA UNTUK AI CONTENT:")
+        print("1. 🇮🇩 Bahasa Indonesia")
+        print("2. 🇺🇸 English")
+        
+        choice = input(f"{Fore.WHITE}Pilihan (1-2, default: 1): ").strip()
+        
+        if choice == "2":
+            self._log("Language selected: English", "AI")
+            return "english"
+        else:
+            self._log("Bahasa dipilih: Indonesia", "AI")
+            return "indonesian"
+
     def check_system_requirements(self):
         """Check system requirements"""
         self._log("Checking system requirements...", "HEADER")
@@ -346,6 +364,7 @@ class SocialMediaUploader:
         print("=" * 70)
         print(f"{Fore.LIGHTMAGENTA_EX}🎯 Dengan Video + Text + Media Support + AI + FFmpeg + Instagram Integration")
         print(f"{Fore.LIGHTGREEN_EX}📹 Support: File Lokal & Link Sosmed untuk SEMUA pilihan")
+        print(f"{Fore.LIGHTYELLOW_EX}🤖 Enhanced dengan Gemini 2.0-flash AI & Language Support")
         print()
         print(f"{Fore.CYAN}💻 System: {os.name.upper()}")
         print()
@@ -478,7 +497,7 @@ class SocialMediaUploader:
         if not platforms:
             return
         
-        # Optional: AI content generation
+        # Optional: AI content generation dengan language support
         ai_content = None
         if self.ai_assistant:
             print(f"\n{Fore.YELLOW}🤖 AI Content Generation (Optional):")
@@ -488,26 +507,34 @@ class SocialMediaUploader:
             ai_choice = input(f"\n{Fore.WHITE}Pilihan (1-2): ").strip()
             
             if ai_choice == "1":
-                self._log("⚙️ Analyzing video dengan Gemini AI...", "PIPELINE")
-                analysis = self.ai_assistant.analyze_video_content(enhanced_video_path)
+                # Get language preference
+                language = self.get_ai_language_preference()
+                
+                self._log("⚙️ Analyzing video dengan Gemini 2.0-flash...", "AI")
+                analysis = self.ai_assistant.analyze_video_content(enhanced_video_path, language=language)
                 
                 if analysis:
-                    self._log("⚙️ Generating platform-specific content...", "PIPELINE")
-                    ai_content = self.ai_assistant.generate_platform_content(analysis, platforms)
+                    self._log("⚙️ Generating platform-specific content...", "AI")
+                    ai_content = self.ai_assistant.generate_platform_content(analysis, platforms, language=language)
                     
                     print(f"\n{Fore.GREEN}🎯 AI CONTENT GENERATED:")
                     for platform in platforms:
                         if platform in ai_content:
                             content = ai_content[platform]
                             print(f"\n{platform.upper()}:")
-                            print(f"  Title: {content.get('title', 'N/A')}")
+                            if 'title_options' in content:
+                                print(f"  Title Options: {content['title_options'][:2]}")
+                            else:
+                                print(f"  Title: {content.get('title', 'N/A')}")
                             print(f"  Description: {content.get('description', 'N/A')[:100]}...")
+                            if 'caption_suggestion' in content:
+                                print(f"  Caption: {content.get('caption_suggestion', 'N/A')}")
         
         # Upload to selected platforms
         self._upload_video_to_platforms(enhanced_video_path, platforms, ai_content)
 
     def _text_status_pipeline(self):
-        """Text status pipeline"""
+        """Text status pipeline dengan enhanced AI"""
         print(f"\n{Fore.CYAN}📝 TEXT STATUS PIPELINE")
         print("=" * 40)
         
@@ -547,11 +574,15 @@ class SocialMediaUploader:
                 self._log("Prompt tidak boleh kosong!", "ERROR")
                 return
             
-            self._log("Generating AI content...", "INFO")
+            # Get language preference
+            language = self.get_ai_language_preference()
+            
+            self._log("Generating AI content dengan Gemini 2.0-flash...", "AI")
             result = self.facebook_uploader.create_facebook_post(
                 use_ai=True, 
                 ai_prompt=prompt, 
-                content_type="status"
+                content_type="status",
+                language=language
             )
             
             if result.get("success"):
@@ -580,7 +611,7 @@ class SocialMediaUploader:
         # Get caption
         caption = input(f"{Fore.CYAN}Caption (optional): ").strip()
         
-        # Optional: AI caption generation
+        # Optional: AI caption generation dengan language support
         if not caption and self.ai_assistant:
             print(f"\n{Fore.YELLOW}🤖 Generate AI caption?")
             print("1. ✨ Yes, generate AI caption")
@@ -597,21 +628,24 @@ class SocialMediaUploader:
                 platform_choice = input(f"{Fore.WHITE}Pilihan (1-2): ").strip()
                 target_platform = "facebook" if platform_choice == "1" else "instagram"
                 
+                # Get language preference
+                language = self.get_ai_language_preference()
+                
                 if media_type == "video":
-                    self._log("⚙️ Analyzing video untuk AI caption...", "PIPELINE")
-                    analysis = self.ai_assistant.analyze_video_content(media_path)
+                    self._log("⚙️ Analyzing video untuk AI caption...", "AI")
+                    analysis = self.ai_assistant.analyze_video_content(media_path, language=language)
                     
                     # Generate caption based on analysis untuk target platform
                     content_topic = f"video about {', '.join(analysis.get('objects', ['content']))}"
-                    ai_post = self.ai_assistant.generate_text_post(content_topic, target_platform)
+                    ai_post = self.ai_assistant.generate_text_post(content_topic, target_platform, language=language)
                     caption = ai_post.get('content', '')
                     
                     if caption:
                         self._log(f"✅ AI caption generated: {caption[:50]}...", "SUCCESS")
                 else:
                     # For images, generate generic caption untuk target platform
-                    self._log("⚙️ Generating AI caption untuk image...", "PIPELINE")
-                    ai_post = self.ai_assistant.generate_text_post("amazing image content", target_platform)
+                    self._log("⚙️ Generating AI caption untuk image...", "AI")
+                    ai_post = self.ai_assistant.generate_text_post("amazing image content", target_platform, language=language)
                     caption = ai_post.get('content', '')
                     
                     if caption:
@@ -722,13 +756,25 @@ class SocialMediaUploader:
             
             # Get AI-generated content for this platform
             platform_content = ai_content.get(platform, {}) if ai_content else {}
-            title = platform_content.get('title', f"Amazing Video for {platform.title()}")
-            description = platform_content.get('description', f"Check out this amazing content! #{platform} #viral #trending")
+            
+            # Use AI content or fallback
+            if 'title_options' in platform_content:
+                title = platform_content['title_options'][0]  # Use first title option
+            else:
+                title = platform_content.get('title', f"Amazing Video for {platform.title()}")
+            
+            if 'caption_suggestion' in platform_content:
+                description = platform_content['caption_suggestion']
+            else:
+                description = platform_content.get('description', f"Check out this amazing content! #{platform} #viral #trending")
             
             try:
                 if platform == "tiktok" and self.tiktok_uploader:
                     # Use AI-generated hashtags or default
-                    hashtags = " ".join(platform_content.get('hashtags', ['#fyp', '#viral', '#trending']))
+                    if 'tags' in platform_content:
+                        hashtags = " ".join([f"#{tag}" for tag in platform_content['tags'][:5]])
+                    else:
+                        hashtags = "#fyp #viral #trending"
                     result = self.tiktok_uploader.upload_video(video_path, hashtags)
                 
                 elif platform == "facebook" and self.facebook_uploader:
