@@ -2,6 +2,7 @@
 """
 Facebook Uploader untuk Status dan Reels menggunakan Selenium
 Mendukung cookies JSON untuk auto-login dan upload berbagai jenis konten
+Fixed untuk error [WinError 193] dengan Universal Driver Manager
 """
 
 import os
@@ -31,6 +32,13 @@ import argparse
 
 # Initialize colorama
 init(autoreset=True)
+
+# Import Universal Driver Manager
+try:
+    from driver_manager import get_chrome_driver
+    DRIVER_MANAGER_AVAILABLE = True
+except ImportError:
+    DRIVER_MANAGER_AVAILABLE = False
 
 class FacebookUploader:
     def __init__(self, headless: bool = False, debug: bool = False):
@@ -129,51 +137,46 @@ class FacebookUploader:
         icon = icons.get(level, "📝")
         print(f"{color}{icon} {message}{Style.RESET_ALL}")
 
-    def _find_chromedriver(self):
-        """Find ChromeDriver dengan multiple methods"""
-        # Method 1: Check if chromedriver is in PATH
-        import shutil
-        chromedriver_path = shutil.which('chromedriver')
-        if chromedriver_path:
-            self._log(f"ChromeDriver found in PATH: {chromedriver_path}", "SUCCESS")
-            return chromedriver_path
-        
-        # Method 2: Check common installation paths
-        common_paths = [
-            r"C:\Program Files\Google\Chrome\Application\chromedriver.exe",
-            r"C:\Program Files (x86)\Google\Chrome\Application\chromedriver.exe",
-            r"C:\chromedriver\chromedriver.exe",
-            r"C:\Windows\System32\chromedriver.exe",
-            "./chromedriver.exe",
-            "./chromedriver"
-        ]
-        
-        for path in common_paths:
-            if os.path.exists(path):
-                self._log(f"ChromeDriver found at: {path}", "SUCCESS")
-                return path
-        
-        # Method 3: Try WebDriver Manager
-        try:
-            from webdriver_manager.chrome import ChromeDriverManager
-            
-            # Suppress WebDriver Manager logs
-            os.environ['WDM_LOG_LEVEL'] = '0'
-            os.environ['WDM_PRINT_FIRST_LINE'] = 'False'
-            
-            chromedriver_path = ChromeDriverManager().install()
-            if chromedriver_path and os.path.exists(chromedriver_path):
-                self._log(f"ChromeDriver downloaded via WebDriver Manager: {chromedriver_path}", "SUCCESS")
-                return chromedriver_path
-        except Exception as e:
-            self._log(f"WebDriver Manager failed: {e}", "WARNING")
-        
-        return None
-
     def _setup_driver(self):
-        """Setup Chrome WebDriver dengan konfigurasi optimal untuk Facebook"""
+        """Setup Chrome WebDriver menggunakan Universal Driver Manager"""
         self._log("Setting up browser for Facebook...")
         
+        try:
+            if DRIVER_MANAGER_AVAILABLE:
+                # Use Universal Driver Manager
+                additional_options = [
+                    '--disable-notifications',
+                    '--disable-popup-blocking',
+                    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                ]
+                
+                self.driver = get_chrome_driver(
+                    headless=self.headless,
+                    additional_options=additional_options
+                )
+                
+            else:
+                # Fallback to manual setup
+                self._log("Universal Driver Manager not available, using fallback...", "WARNING")
+                self._setup_driver_fallback()
+            
+            # Setup wait
+            self.wait = WebDriverWait(self.driver, 30)
+            
+            self._log("Browser ready for Facebook", "SUCCESS")
+            
+        except Exception as e:
+            self._log(f"Failed to setup browser: {str(e)}", "ERROR")
+            self._log("Troubleshooting tips:", "INFO")
+            self._log("1. Run: python fix_all_drivers.py", "INFO")
+            self._log("2. Install Google Chrome browser", "INFO")
+            self._log("3. Download ChromeDriver from https://chromedriver.chromium.org/", "INFO")
+            self._log("4. Place chromedriver.exe in your PATH or project folder", "INFO")
+            self._log("5. Install webdriver-manager: pip install webdriver-manager", "INFO")
+            raise
+
+    def _setup_driver_fallback(self):
+        """Fallback driver setup jika Universal Driver Manager tidak tersedia"""
         chrome_options = Options()
         
         # Basic options
@@ -202,35 +205,30 @@ class FacebookUploader:
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
         try:
-            # Find ChromeDriver
-            chromedriver_path = self._find_chromedriver()
-            
-            if not chromedriver_path:
-                raise Exception("ChromeDriver not found. Please install ChromeDriver or Chrome browser.")
-            
-            # Setup service
-            service = Service(
-                chromedriver_path,
-                log_path=os.devnull,
-                service_args=['--silent']
-            )
-            
-            self.driver = webdriver.Chrome(service=service, options=chrome_options)
+            # Try WebDriver Manager first
+            try:
+                from webdriver_manager.chrome import ChromeDriverManager
+                
+                service = Service(
+                    ChromeDriverManager().install(),
+                    log_path=os.devnull,
+                    service_args=['--silent']
+                )
+                
+                self.driver = webdriver.Chrome(service=service, options=chrome_options)
+                
+            except Exception as e:
+                self._log(f"WebDriver Manager failed: {e}", "WARNING")
+                self._log("Trying system ChromeDriver...", "INFO")
+                
+                # Fallback to system ChromeDriver
+                self.driver = webdriver.Chrome(options=chrome_options)
             
             # Anti-detection scripts
             self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             
-            self.wait = WebDriverWait(self.driver, 30)
-            
-            self._log("Browser ready for Facebook", "SUCCESS")
-            
         except Exception as e:
             self._log(f"Failed to setup browser: {str(e)}", "ERROR")
-            self._log("Troubleshooting tips:", "INFO")
-            self._log("1. Install Google Chrome browser", "INFO")
-            self._log("2. Download ChromeDriver from https://chromedriver.chromium.org/", "INFO")
-            self._log("3. Place chromedriver.exe in your PATH or project folder", "INFO")
-            self._log("4. Install webdriver-manager: pip install webdriver-manager", "INFO")
             raise
 
     def _find_element_by_selectors(self, selectors: list, timeout: int = 10, visible: bool = True) -> Optional[Any]:
