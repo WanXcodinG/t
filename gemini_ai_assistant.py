@@ -19,6 +19,14 @@ from colorama import init, Fore, Style
 # Initialize colorama
 init(autoreset=True)
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+
 try:
     import google.generativeai as genai
     GENAI_AVAILABLE = True
@@ -73,6 +81,33 @@ class GeminiAIAssistant:
         icon = icons.get(level, "📝")
         print(f"{color}{icon} {message}{Style.RESET_ALL}")
 
+    def _load_env_file(self):
+        """Load environment variables from .env file"""
+        env_file = self.base_dir / ".env"
+        
+        if env_file.exists():
+            try:
+                with open(env_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            value = value.strip().strip('"').strip("'")
+                            os.environ[key] = value
+                
+                if self.debug:
+                    self._log("Environment variables loaded from .env file", "SUCCESS")
+                return True
+            except Exception as e:
+                if self.debug:
+                    self._log(f"Error loading .env file: {e}", "WARNING")
+                return False
+        else:
+            if self.debug:
+                self._log(".env file not found", "WARNING")
+            return False
+
     def _initialize_gemini(self):
         """Initialize Gemini AI"""
         if not GENAI_AVAILABLE:
@@ -80,11 +115,17 @@ class GeminiAIAssistant:
             self._log("Install dengan: pip install google-generativeai", "INFO")
             return False
         
+        # Load .env file first
+        self._load_env_file()
+        
         # Get API key from environment
         api_key = os.getenv('GEMINI_API_KEY')
+        
         if not api_key:
-            self._log("GEMINI_API_KEY tidak ditemukan di environment variables", "WARNING")
-            self._log("Set dengan: set GEMINI_API_KEY=your_api_key", "INFO")
+            self._log("GEMINI_API_KEY tidak ditemukan", "WARNING")
+            self._log("Buat file .env di folder project dengan isi:", "INFO")
+            self._log("GEMINI_API_KEY=your_api_key_here", "INFO")
+            self._log("Atau set environment variable: set GEMINI_API_KEY=your_api_key", "INFO")
             return False
         
         try:
@@ -375,6 +416,40 @@ class GeminiAIAssistant:
         except Exception as e:
             self._log(f"Error cleaning temp files: {e}", "ERROR")
 
+    def check_api_status(self):
+        """Check Gemini API status"""
+        self._log("Checking Gemini API status...", "INFO")
+        
+        # Load .env file
+        self._load_env_file()
+        
+        api_key = os.getenv('GEMINI_API_KEY')
+        
+        if not api_key:
+            self._log("❌ GEMINI_API_KEY tidak ditemukan", "ERROR")
+            self._log("Buat file .env dengan isi:", "INFO")
+            self._log("GEMINI_API_KEY=your_api_key_here", "INFO")
+            return False
+        
+        if not GENAI_AVAILABLE:
+            self._log("❌ google-generativeai tidak terinstall", "ERROR")
+            self._log("Install dengan: pip install google-generativeai", "INFO")
+            return False
+        
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-pro')
+            
+            # Test simple request
+            response = model.generate_content("Hello")
+            
+            self._log("✅ Gemini API working correctly", "SUCCESS")
+            return True
+            
+        except Exception as e:
+            self._log(f"❌ Gemini API error: {e}", "ERROR")
+            return False
+
     def interactive_ai_menu(self):
         """Interactive AI assistant menu"""
         if not GENAI_AVAILABLE:
@@ -384,7 +459,7 @@ class GeminiAIAssistant:
         
         if not self.model:
             print(f"{Fore.RED}❌ Gemini AI tidak tersedia!")
-            print(f"{Fore.YELLOW}Set GEMINI_API_KEY environment variable")
+            print(f"{Fore.YELLOW}Buat file .env dengan GEMINI_API_KEY=your_api_key")
             return
         
         print(f"\n{Fore.LIGHTMAGENTA_EX}🤖 Gemini AI Assistant")
@@ -395,10 +470,11 @@ class GeminiAIAssistant:
             print("1. 🎬 Analyze Video")
             print("2. ✍️ Generate Text Post")
             print("3. 📱 Generate Platform Content")
-            print("4. 🧹 Cleanup Temp Files")
-            print("5. ❌ Keluar")
+            print("4. 🔍 Check API Status")
+            print("5. 🧹 Cleanup Temp Files")
+            print("6. ❌ Keluar")
             
-            choice = input(f"\n{Fore.WHITE}Pilihan (1-5): ").strip()
+            choice = input(f"\n{Fore.WHITE}Pilihan (1-6): ").strip()
             
             if choice == "1":
                 video_path = input(f"{Fore.CYAN}Path ke video: ").strip()
@@ -450,9 +526,12 @@ class GeminiAIAssistant:
                     print(f"{Fore.RED}❌ File video tidak ditemukan!")
             
             elif choice == "4":
-                self.cleanup_temp_files()
+                self.check_api_status()
             
             elif choice == "5":
+                self.cleanup_temp_files()
+            
+            elif choice == "6":
                 print(f"{Fore.YELLOW}👋 Sampai jumpa!")
                 break
             
@@ -468,16 +547,16 @@ def main():
     parser.add_argument("--platform", "-p", help="Platform target")
     parser.add_argument("--strategy", "-s", choices=['viral', 'quality', 'speed', 'balanced'], 
                        default='balanced', help="Content strategy")
-    parser.add_argument("--api-key", help="Gemini API key")
+    parser.add_argument("--check-api", action="store_true", help="Check API status")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     
     args = parser.parse_args()
     
-    # Set API key if provided
-    if args.api_key:
-        os.environ['GEMINI_API_KEY'] = args.api_key
-    
     assistant = GeminiAIAssistant(debug=args.debug)
+    
+    if args.check_api:
+        assistant.check_api_status()
+        return
     
     if args.video:
         if not os.path.exists(args.video):

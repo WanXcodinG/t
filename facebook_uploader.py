@@ -33,6 +33,14 @@ import argparse
 # Initialize colorama
 init(autoreset=True)
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+
 # Import Universal Driver Manager
 try:
     from driver_manager import get_chrome_driver
@@ -68,6 +76,9 @@ class FacebookUploader:
         self.cookies_path = self.cookies_dir / "facebook_cookies.json"
         self.screenshots_dir = self.base_dir / "screenshots"
         self.screenshots_dir.mkdir(exist_ok=True)
+        
+        # Load environment variables
+        self._load_env_file()
         
         # Initialize AI Assistant
         self.ai_assistant = GeminiAIAssistant(debug=debug) if AI_AVAILABLE else None
@@ -143,6 +154,27 @@ class FacebookUploader:
         
         icon = icons.get(level, "📝")
         print(f"{color}{icon} {message}{Style.RESET_ALL}")
+
+    def _load_env_file(self):
+        """Load environment variables from .env file"""
+        env_file = self.base_dir / ".env"
+        
+        if env_file.exists():
+            try:
+                with open(env_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            value = value.strip().strip('"').strip("'")
+                            os.environ[key] = value
+                
+                if self.debug:
+                    self._log("Environment variables loaded from .env file", "SUCCESS")
+            except Exception as e:
+                if self.debug:
+                    self._log(f"Error loading .env file: {e}", "WARNING")
 
     def _setup_driver(self):
         """Setup Chrome WebDriver menggunakan Universal Driver Manager"""
@@ -879,7 +911,7 @@ class FacebookUploader:
         if not self.ai_assistant:
             print(f"{Fore.RED}❌ AI Assistant tidak tersedia!")
             print(f"{Fore.YELLOW}Install dengan: pip install google-generativeai")
-            print(f"{Fore.YELLOW}Set API key: set GEMINI_API_KEY=your_api_key")
+            print(f"{Fore.YELLOW}Buat file .env dengan: GEMINI_API_KEY=your_api_key")
             return
         
         print(f"{Fore.YELLOW}Contoh prompt:")
