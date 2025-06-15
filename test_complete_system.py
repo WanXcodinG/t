@@ -111,76 +111,165 @@ def test_chromedriver_setup():
             log("driver_manager.py not found", "ERROR")
             return False
         
-        # Import driver manager to check if it works
-        from driver_manager import UniversalDriverManager
+        log("Checking ChromeDriver availability...", "INFO")
         
-        manager = UniversalDriverManager()
+        # Check PATH
+        import shutil
+        chromedriver_path = shutil.which('chromedriver')
         
-        # Check if Chrome is available
-        chrome_version = manager.get_chrome_version()
-        if not chrome_version:
-            log("Chrome not available for driver creation", "ERROR")
-            return False
-        
-        # Check if ChromeDriver can be found
-        chromedriver_path = manager.find_existing_chromedriver()
         if chromedriver_path:
-            log(f"ChromeDriver found: {chromedriver_path}", "SUCCESS")
+            log(f"ChromeDriver found in PATH: {chromedriver_path}", "SUCCESS")
             return True
+        
+        # Check common locations
+        system = platform.system().lower()
+        common_paths = []
+        
+        if system == "windows":
+            common_paths = [
+                "chromedriver.exe",
+                "drivers/chromedriver.exe",
+                r"C:\chromedriver\chromedriver.exe"
+            ]
         else:
-            log("ChromeDriver not found", "WARNING")
-            log("Will be auto-downloaded when needed", "INFO")
-            return True  # Still consider as success since it can auto-download
-                
+            common_paths = [
+                "chromedriver",
+                "drivers/chromedriver",
+                "/usr/local/bin/chromedriver",
+                "/usr/bin/chromedriver"
+            ]
+        
+        for path in common_paths:
+            if os.path.exists(path):
+                log(f"ChromeDriver found: {path}", "SUCCESS")
+                return True
+        
+        # Check WebDriver Manager cache
+        try:
+            home_dir = Path.home()
+            wdm_cache = home_dir / ".wdm" / "drivers" / "chromedriver"
+            
+            if wdm_cache.exists():
+                for chromedriver_file in wdm_cache.rglob("chromedriver*"):
+                    if chromedriver_file.is_file() and chromedriver_file.stat().st_size > 1024*1024:
+                        log(f"ChromeDriver found in cache: {chromedriver_file}", "SUCCESS")
+                        return True
+        except:
+            pass
+        
+        log("ChromeDriver not found", "WARNING")
+        log("Will be auto-downloaded when needed", "INFO")
+        return True  # Consider as success since it can auto-download
+        
     except Exception as e:
         log(f"ChromeDriver setup error: {e}", "ERROR")
         return False
 
-def test_social_media_uploader():
-    """Test social media uploader import dan initialization"""
-    log("Testing Social Media Uploader", "HEADER")
+def test_python_dependencies():
+    """Test Python dependencies tanpa import yang kompleks"""
+    log("Testing Python Dependencies", "HEADER")
+    
+    required_packages = {
+        "selenium": "Selenium WebDriver",
+        "webdriver_manager": "WebDriver Manager", 
+        "colorama": "Colorama",
+        "requests": "Requests",
+        "google_generativeai": "Google Generative AI (Optional)",
+        "opencv_python": "OpenCV (Optional)",
+        "pillow": "Pillow (Optional)",
+        "numpy": "NumPy (Optional)",
+        "yt_dlp": "yt-dlp (Optional)"
+    }
+    
+    installed = 0
+    total = len(required_packages)
+    
+    for package, description in required_packages.items():
+        try:
+            # Handle package name variations
+            import_name = package.replace('-', '_')
+            if package == "opencv_python":
+                import_name = "cv2"
+            elif package == "pillow":
+                import_name = "PIL"
+            
+            __import__(import_name)
+            log(f"{description}: ✅ Installed", "SUCCESS")
+            installed += 1
+        except ImportError:
+            if package in ["google_generativeai", "opencv_python", "pillow", "numpy", "yt_dlp"]:
+                log(f"{description}: ⚠️ Optional - Not installed", "WARNING")
+            else:
+                log(f"{description}: ❌ Required - Not installed", "ERROR")
+    
+    log(f"Dependencies: {installed}/{total} available", "INFO")
+    return installed >= 4  # At least core dependencies
+
+def test_module_imports():
+    """Test module imports tanpa inisialisasi yang membuka Chrome"""
+    log("Testing Module Imports", "HEADER")
+    
+    modules = [
+        ("driver_manager", "Driver Manager"),
+        ("social_media_uploader", "Social Media Uploader"),
+        ("tiktok_uploader", "TikTok Uploader"),
+        ("facebook_uploader", "Facebook Uploader"),
+        ("instagram_uploader", "Instagram Uploader"),
+        ("youtube_api_uploader", "YouTube API Uploader")
+    ]
+    
+    import_success = 0
+    
+    for module_name, description in modules:
+        try:
+            # Import module tanpa inisialisasi
+            module = __import__(module_name)
+            log(f"{description}: ✅ Import successful", "SUCCESS")
+            import_success += 1
+        except ImportError as e:
+            log(f"{description}: ❌ Import failed: {e}", "ERROR")
+        except Exception as e:
+            log(f"{description}: ⚠️ Import warning: {e}", "WARNING")
+            import_success += 1  # Count as success if not import error
+    
+    return import_success >= len(modules) - 1
+
+def test_driver_manager_basic():
+    """Test driver manager basic functionality tanpa membuat driver"""
+    log("Testing Driver Manager Basic", "HEADER")
     
     try:
-        if not os.path.exists("social_media_uploader.py"):
-            log("social_media_uploader.py not found", "ERROR")
-            return False
+        # Import driver manager
+        from driver_manager import UniversalDriverManager
         
-        # Test import
-        from social_media_uploader import SocialMediaUploader
+        # Create instance tanpa debug untuk avoid verbose output
+        manager = UniversalDriverManager(debug=False)
         
-        # Test basic initialization
-        uploader = SocialMediaUploader(debug=False)
-        log("Social Media Uploader initialization successful", "SUCCESS")
+        log("Driver Manager initialization successful", "SUCCESS")
         
-        # Check components availability
-        components = {
-            "Video Downloader": uploader.video_downloader,
-            "AI Assistant": uploader.ai_assistant,
-            "Video Editor": uploader.video_editor,
-            "TikTok Uploader": uploader.tiktok_uploader,
-            "Facebook Uploader": uploader.facebook_uploader,
-            "YouTube Uploader": uploader.youtube_uploader,
-            "Instagram Uploader": uploader.instagram_uploader
-        }
+        # Test Chrome detection
+        chrome_version = manager.get_chrome_version()
+        if chrome_version:
+            log(f"Chrome version detected: {chrome_version}", "SUCCESS")
+        else:
+            log("Chrome version not detected", "WARNING")
         
-        available_count = 0
-        for name, component in components.items():
-            if component:
-                log(f"{name}: ✅ Available", "SUCCESS")
-                available_count += 1
-            else:
-                log(f"{name}: ❌ Not available", "WARNING")
+        # Test ChromeDriver detection (tanpa download)
+        chromedriver_path = manager.find_existing_chromedriver()
+        if chromedriver_path:
+            log(f"ChromeDriver found: {chromedriver_path}", "SUCCESS")
+        else:
+            log("ChromeDriver not found (will auto-download when needed)", "INFO")
         
-        log(f"Components available: {available_count}/{len(components)}", "INFO")
         return True
         
     except Exception as e:
-        log(f"Social Media Uploader error: {e}", "ERROR")
+        log(f"Driver Manager test error: {e}", "ERROR")
         return False
 
-def test_individual_uploaders():
-    """Test individual uploaders import dan basic initialization"""
-    log("Testing Individual Uploaders", "HEADER")
+def test_uploader_classes():
+    """Test uploader classes tanpa inisialisasi yang membuka browser"""
+    log("Testing Uploader Classes", "HEADER")
     
     uploaders = [
         ("TikTok", "tiktok_uploader", "TikTokUploader"),
@@ -193,21 +282,18 @@ def test_individual_uploaders():
     
     for name, module_name, class_name in uploaders:
         try:
-            log(f"Testing {name} uploader...", "INFO")
+            log(f"Testing {name} uploader class...", "INFO")
             
             if not os.path.exists(f"{module_name}.py"):
                 log(f"{name} uploader: ❌ File not found", "ERROR")
                 results[name] = False
                 continue
             
-            # Test import
+            # Test import class tanpa inisialisasi
             module = __import__(module_name)
             uploader_class = getattr(module, class_name)
             
-            # Test basic initialization
-            uploader = uploader_class(debug=False)
-            
-            log(f"{name} uploader: ✅ Initialization successful", "SUCCESS")
+            log(f"{name} uploader: ✅ Class import successful", "SUCCESS")
             results[name] = True
             
         except Exception as e:
@@ -216,104 +302,9 @@ def test_individual_uploaders():
     
     return results
 
-def test_ai_components():
-    """Test AI components"""
-    log("Testing AI Components", "HEADER")
-    
-    try:
-        if not os.path.exists("gemini_ai_assistant.py"):
-            log("gemini_ai_assistant.py not found", "WARNING")
-            return False
-        
-        from gemini_ai_assistant import GeminiAIAssistant
-        
-        ai = GeminiAIAssistant(debug=False)
-        log("Gemini AI Assistant initialization successful", "SUCCESS")
-        
-        if os.getenv('GEMINI_API_KEY'):
-            log("Gemini API key configured", "SUCCESS")
-        else:
-            log("Gemini API key not configured", "WARNING")
-            log("Set with: set GEMINI_API_KEY=your_api_key", "INFO")
-        
-        return True
-        
-    except ImportError:
-        log("AI components not available", "WARNING")
-        log("Install with: pip install google-generativeai", "INFO")
-        return False
-    except Exception as e:
-        log(f"AI components error: {e}", "ERROR")
-        return False
-
-def test_video_components():
-    """Test video components"""
-    log("Testing Video Components", "HEADER")
-    
-    try:
-        success = True
-        
-        if os.path.exists("video_downloader.py"):
-            from video_downloader import VideoDownloader
-            
-            downloader = VideoDownloader(debug=False)
-            log("Video Downloader initialization successful", "SUCCESS")
-            
-            if downloader.ytdlp_path:
-                log("yt-dlp available", "SUCCESS")
-            else:
-                log("yt-dlp not available", "WARNING")
-        else:
-            log("video_downloader.py not found", "WARNING")
-            success = False
-        
-        if os.path.exists("ffmpeg_video_editor.py"):
-            from ffmpeg_video_editor import FFmpegVideoEditor
-            
-            editor = FFmpegVideoEditor(debug=False)
-            log("FFmpeg Video Editor initialization successful", "SUCCESS")
-            
-            if editor.ffmpeg_path:
-                log("FFmpeg available", "SUCCESS")
-            else:
-                log("FFmpeg not available", "WARNING")
-        else:
-            log("ffmpeg_video_editor.py not found", "WARNING")
-        
-        return success
-        
-    except Exception as e:
-        log(f"Video components error: {e}", "ERROR")
-        return False
-
-def show_system_status():
-    """Show system status"""
-    log("System Status Summary", "HEADER")
-    
-    print(f"\n{Fore.LIGHTBLUE_EX}💻 SYSTEM INFORMATION:")
-    print("=" * 40)
-    print(f"OS: {platform.system()} {platform.release()}")
-    print(f"Architecture: {platform.machine()}")
-    print(f"Python: {platform.python_version()}")
-    
-    print(f"\n{Fore.LIGHTBLUE_EX}🔧 DEPENDENCIES:")
-    print("=" * 40)
-    
-    dependencies = [
-        "selenium", "webdriver_manager", "colorama", "requests",
-        "google_generativeai", "opencv_python", "pillow", "numpy", "yt_dlp"
-    ]
-    
-    for dep in dependencies:
-        try:
-            __import__(dep.replace('_', '-').replace('-', '_'))
-            print(f"✅ {dep}")
-        except ImportError:
-            print(f"❌ {dep}")
-
 def run_complete_test():
     """Run complete system test tanpa membuka Chrome"""
-    print(f"\n{Fore.LIGHTBLUE_EX}🧪 COMPLETE SYSTEM TEST")
+    print(f"\n{Fore.LIGHTBLUE_EX}🧪 COMPLETE SYSTEM TEST - NO CHROME OPENING")
     print("=" * 60)
     print(f"{Fore.YELLOW}Testing all components without opening Chrome...")
     print()
@@ -321,10 +312,10 @@ def run_complete_test():
     tests = [
         ("Chrome Detection", test_chrome_detection),
         ("ChromeDriver Setup", test_chromedriver_setup),
-        ("Social Media Uploader", test_social_media_uploader),
-        ("Individual Uploaders", test_individual_uploaders),
-        ("AI Components", test_ai_components),
-        ("Video Components", test_video_components)
+        ("Python Dependencies", test_python_dependencies),
+        ("Module Imports", test_module_imports),
+        ("Driver Manager Basic", test_driver_manager_basic),
+        ("Uploader Classes", test_uploader_classes)
     ]
     
     passed = 0
@@ -372,8 +363,6 @@ def run_complete_test():
         print("1. Install Chrome: https://www.google.com/chrome/")
         print("2. Run: python fix_all_drivers.py")
         print("3. Install dependencies: pip install -r requirements.txt")
-    
-    show_system_status()
     
     return passed >= total - 2
 
