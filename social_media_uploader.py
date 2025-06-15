@@ -263,18 +263,18 @@ class SocialMediaUploader:
                 return None, None, None
             
             # Download video
-            self._log("Downloading video dari URL...", "DOWNLOAD")
+            self._log("📥 Downloading video dari URL...", "DOWNLOAD")
             
             # Detect platform untuk optimasi download
             platform = self.video_downloader.detect_platform(video_url)
-            self._log(f"Platform terdeteksi: {platform}", "INFO")
+            self._log(f"ℹ️ Platform terdeteksi: {platform}", "INFO")
             
             # Get video info first
             info = self.video_downloader.get_video_info(video_url)
             if "error" not in info:
-                self._log(f"Video: {info.get('title', 'Unknown')[:50]}...", "INFO")
-                self._log(f"Durasi: {info.get('duration', 0):.0f} detik", "INFO")
-                self._log(f"Platform: {info.get('platform', 'unknown')}", "INFO")
+                self._log(f"ℹ️ Video: {info.get('title', 'Unknown')[:50]}...", "INFO")
+                self._log(f"ℹ️ Durasi: {info.get('duration', 0):.0f} detik", "INFO")
+                self._log(f"ℹ️ Platform: {info.get('platform', 'unknown')}", "INFO")
             
             # Choose quality
             print(f"\n{Fore.YELLOW}Pilih kualitas download:")
@@ -292,11 +292,11 @@ class SocialMediaUploader:
             
             if result.get("success"):
                 video_path = result["file_path"]
-                self._log(f"Video berhasil didownload: {result['filename']}", "SUCCESS")
-                self._log(f"Size: {result['file_size_mb']:.2f}MB", "INFO")
+                self._log(f"✅ Video berhasil didownload: {result['filename']}", "SUCCESS")
+                self._log(f"ℹ️ Size: {result['file_size_mb']:.2f}MB", "INFO")
                 return video_path, "url", "video"
             else:
-                self._log(f"Download gagal: {result.get('error')}", "ERROR")
+                self._log(f"❌ Download gagal: {result.get('error')}", "ERROR")
                 return None, None, None
         
         elif choice == "3":
@@ -422,7 +422,7 @@ class SocialMediaUploader:
         if not media_path:
             return
         
-        self._log(f"Video source: {source_type} - {os.path.basename(media_path)}", "SUCCESS")
+        self._log(f"✅ Media source: {source_type} - video - {os.path.basename(media_path)}", "SUCCESS")
         
         # Optional: Video enhancement
         enhanced_video_path = media_path
@@ -488,11 +488,11 @@ class SocialMediaUploader:
             ai_choice = input(f"\n{Fore.WHITE}Pilihan (1-2): ").strip()
             
             if ai_choice == "1":
-                self._log("Analyzing video dengan Gemini AI...", "PIPELINE")
+                self._log("⚙️ Analyzing video dengan Gemini AI...", "PIPELINE")
                 analysis = self.ai_assistant.analyze_video_content(enhanced_video_path)
                 
                 if analysis:
-                    self._log("Generating platform-specific content...", "PIPELINE")
+                    self._log("⚙️ Generating platform-specific content...", "PIPELINE")
                     ai_content = self.ai_assistant.generate_platform_content(analysis, platforms)
                     
                     print(f"\n{Fore.GREEN}🎯 AI CONTENT GENERATED:")
@@ -565,7 +565,7 @@ class SocialMediaUploader:
             self._log("Pilihan tidak valid!", "ERROR")
 
     def _image_media_pipeline(self):
-        """Enhanced image/media pipeline dengan file/URL support"""
+        """Enhanced image/media pipeline dengan file/URL support dan improved AI"""
         print(f"\n{Fore.CYAN}🖼️ IMAGE/MEDIA PIPELINE")
         print("=" * 40)
         
@@ -575,7 +575,7 @@ class SocialMediaUploader:
         if not media_path:
             return
         
-        self._log(f"Media source: {source_type} - {media_type} - {os.path.basename(media_path)}", "SUCCESS")
+        self._log(f"✅ Media source: {source_type} - {media_type} - {os.path.basename(media_path)}", "SUCCESS")
         
         # Get caption
         caption = input(f"{Fore.CYAN}Caption (optional): ").strip()
@@ -589,26 +589,33 @@ class SocialMediaUploader:
             ai_choice = input(f"\n{Fore.WHITE}Pilihan (1-2): ").strip()
             
             if ai_choice == "1":
+                # Get target platform for AI generation
+                print(f"\n{Fore.YELLOW}Target platform untuk AI caption:")
+                print("1. 📘 Facebook")
+                print("2. 📸 Instagram")
+                
+                platform_choice = input(f"{Fore.WHITE}Pilihan (1-2): ").strip()
+                target_platform = "facebook" if platform_choice == "1" else "instagram"
+                
                 if media_type == "video":
-                    self._log("Analyzing video untuk AI caption...", "PIPELINE")
+                    self._log("⚙️ Analyzing video untuk AI caption...", "PIPELINE")
                     analysis = self.ai_assistant.analyze_video_content(media_path)
                     
-                    # Generate caption based on analysis
-                    ai_post = self.ai_assistant.generate_text_post(
-                        f"video about {', '.join(analysis.get('objects', ['content']))}", 
-                        "instagram"
-                    )
+                    # Generate caption based on analysis untuk target platform
+                    content_topic = f"video about {', '.join(analysis.get('objects', ['content']))}"
+                    ai_post = self.ai_assistant.generate_text_post(content_topic, target_platform)
                     caption = ai_post.get('content', '')
                     
                     if caption:
-                        self._log(f"AI caption generated: {caption[:50]}...", "SUCCESS")
+                        self._log(f"✅ AI caption generated: {caption[:50]}...", "SUCCESS")
                 else:
-                    # For images, generate generic caption
-                    ai_post = self.ai_assistant.generate_text_post("amazing image content", "instagram")
+                    # For images, generate generic caption untuk target platform
+                    self._log("⚙️ Generating AI caption untuk image...", "PIPELINE")
+                    ai_post = self.ai_assistant.generate_text_post("amazing image content", target_platform)
                     caption = ai_post.get('content', '')
                     
                     if caption:
-                        self._log(f"AI caption generated: {caption[:50]}...", "SUCCESS")
+                        self._log(f"✅ AI caption generated: {caption[:50]}...", "SUCCESS")
         
         # Select platforms
         print(f"\n{Fore.YELLOW}Pilih platform:")
