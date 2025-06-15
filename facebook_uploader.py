@@ -26,7 +26,6 @@ from selenium.common.exceptions import (
     ElementNotInteractableException,
     StaleElementReferenceException
 )
-from webdriver_manager.chrome import ChromeDriverManager
 from colorama import init, Fore, Style
 import argparse
 
@@ -60,7 +59,7 @@ class FacebookUploader:
         self.reels_url = "https://www.facebook.com/reel/create"
         self.login_url = "https://www.facebook.com/login"
         
-        # Selectors for Facebook
+        # Selectors untuk Facebook
         self.selectors = {
             'status_input': [
                 "div[data-testid='status-attachment-mentions-input']",
@@ -106,7 +105,7 @@ class FacebookUploader:
         }
 
     def _log(self, message: str, level: str = "INFO"):
-        """Enhanced logging with colors"""
+        """Enhanced logging dengan warna"""
         colors = {
             "INFO": Fore.CYAN,
             "SUCCESS": Fore.GREEN,
@@ -130,8 +129,49 @@ class FacebookUploader:
         icon = icons.get(level, "📝")
         print(f"{color}{icon} {message}{Style.RESET_ALL}")
 
+    def _find_chromedriver(self):
+        """Find ChromeDriver dengan multiple methods"""
+        # Method 1: Check if chromedriver is in PATH
+        import shutil
+        chromedriver_path = shutil.which('chromedriver')
+        if chromedriver_path:
+            self._log(f"ChromeDriver found in PATH: {chromedriver_path}", "SUCCESS")
+            return chromedriver_path
+        
+        # Method 2: Check common installation paths
+        common_paths = [
+            r"C:\Program Files\Google\Chrome\Application\chromedriver.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chromedriver.exe",
+            r"C:\chromedriver\chromedriver.exe",
+            r"C:\Windows\System32\chromedriver.exe",
+            "./chromedriver.exe",
+            "./chromedriver"
+        ]
+        
+        for path in common_paths:
+            if os.path.exists(path):
+                self._log(f"ChromeDriver found at: {path}", "SUCCESS")
+                return path
+        
+        # Method 3: Try WebDriver Manager
+        try:
+            from webdriver_manager.chrome import ChromeDriverManager
+            
+            # Suppress WebDriver Manager logs
+            os.environ['WDM_LOG_LEVEL'] = '0'
+            os.environ['WDM_PRINT_FIRST_LINE'] = 'False'
+            
+            chromedriver_path = ChromeDriverManager().install()
+            if chromedriver_path and os.path.exists(chromedriver_path):
+                self._log(f"ChromeDriver downloaded via WebDriver Manager: {chromedriver_path}", "SUCCESS")
+                return chromedriver_path
+        except Exception as e:
+            self._log(f"WebDriver Manager failed: {e}", "WARNING")
+        
+        return None
+
     def _setup_driver(self):
-        """Setup Chrome WebDriver with optimal configuration"""
+        """Setup Chrome WebDriver dengan konfigurasi optimal untuk Facebook"""
         self._log("Setting up browser for Facebook...")
         
         chrome_options = Options()
@@ -162,14 +202,18 @@ class FacebookUploader:
         chrome_options.add_experimental_option('useAutomationExtension', False)
         
         try:
+            # Find ChromeDriver
+            chromedriver_path = self._find_chromedriver()
+            
+            if not chromedriver_path:
+                raise Exception("ChromeDriver not found. Please install ChromeDriver or Chrome browser.")
+            
+            # Setup service
             service = Service(
-                ChromeDriverManager().install(),
+                chromedriver_path,
                 log_path=os.devnull,
                 service_args=['--silent']
             )
-            
-            os.environ['WDM_LOG_LEVEL'] = '0'
-            os.environ['WDM_PRINT_FIRST_LINE'] = 'False'
             
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
             
@@ -182,6 +226,11 @@ class FacebookUploader:
             
         except Exception as e:
             self._log(f"Failed to setup browser: {str(e)}", "ERROR")
+            self._log("Troubleshooting tips:", "INFO")
+            self._log("1. Install Google Chrome browser", "INFO")
+            self._log("2. Download ChromeDriver from https://chromedriver.chromium.org/", "INFO")
+            self._log("3. Place chromedriver.exe in your PATH or project folder", "INFO")
+            self._log("4. Install webdriver-manager: pip install webdriver-manager", "INFO")
             raise
 
     def _find_element_by_selectors(self, selectors: list, timeout: int = 10, visible: bool = True) -> Optional[Any]:
@@ -604,9 +653,13 @@ class FacebookUploader:
         screenshot_path = self.screenshots_dir / filename
         
         try:
-            self.driver.save_screenshot(str(screenshot_path))
-            self._log(f"Screenshot saved: {screenshot_path.name}", "INFO")
-            return str(screenshot_path)
+            if self.driver:
+                self.driver.save_screenshot(str(screenshot_path))
+                self._log(f"Screenshot saved: {screenshot_path.name}", "INFO")
+                return str(screenshot_path)
+            else:
+                self._log("No driver available for screenshot", "WARNING")
+                return None
         except Exception as e:
             self._log(f"Failed to save screenshot: {str(e)}", "WARNING")
             return None
