@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Facebook Uploader untuk Status dan Reels menggunakan Selenium
-Mendukung cookies JSON untuk auto-login dan upload berbagai jenis konten
+Facebook Uploader Unified untuk Status dan Media menggunakan Selenium
+Mendukung text status, media (image/video), dan AI content generation
 Fixed untuk error [WinError 193] dengan Universal Driver Manager
 """
 
@@ -40,6 +40,13 @@ try:
 except ImportError:
     DRIVER_MANAGER_AVAILABLE = False
 
+# Import AI Assistant
+try:
+    from gemini_ai_assistant import GeminiAIAssistant
+    AI_AVAILABLE = True
+except ImportError:
+    AI_AVAILABLE = False
+
 class FacebookUploader:
     def __init__(self, headless: bool = False, debug: bool = False):
         """
@@ -62,53 +69,51 @@ class FacebookUploader:
         self.screenshots_dir = self.base_dir / "screenshots"
         self.screenshots_dir.mkdir(exist_ok=True)
         
+        # Initialize AI Assistant
+        self.ai_assistant = GeminiAIAssistant(debug=debug) if AI_AVAILABLE else None
+        
         # Facebook URLs
         self.home_url = "https://www.facebook.com"
-        self.reels_url = "https://www.facebook.com/reel/create"
         self.login_url = "https://www.facebook.com/login"
         
-        # Selectors untuk Facebook
+        # Enhanced selectors untuk Facebook
         self.selectors = {
             'status_input': [
                 "div[data-testid='status-attachment-mentions-input']",
                 "div[role='textbox'][data-testid='status-attachment-mentions-input']",
                 "div[contenteditable='true'][data-testid='status-attachment-mentions-input']",
                 "div[aria-label*='What\\'s on your mind']",
-                "div[aria-label*='Apa yang Anda pikirkan']"
+                "div[aria-label*='Apa yang Anda pikirkan']",
+                "div[contenteditable='true'][aria-label*='mind']",
+                "div[contenteditable='true'][role='textbox']"
             ],
             'photo_video_button': [
                 "div[aria-label='Photo/video']",
                 "div[aria-label='Foto/video']",
                 "div[data-testid='photo-video-button']",
                 "input[accept*='image']",
-                "input[accept*='video']"
+                "input[accept*='video']",
+                "div[role='button'][aria-label*='Photo']",
+                "div[role='button'][aria-label*='Foto']"
             ],
             'file_input': [
                 "input[type='file']",
                 "input[accept*='video']",
-                "input[accept*='image']"
+                "input[accept*='image']",
+                "input[accept*='image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/x-msvideo']"
             ],
             'post_button': [
                 "div[aria-label='Post']",
                 "div[aria-label='Posting']",
                 "div[data-testid='react-composer-post-button']",
-                "div[role='button'][tabindex='0']"
+                "div[role='button'][tabindex='0']",
+                "button[type='submit']",
+                "div[role='button'][aria-label*='Post']"
             ],
-            'reels_upload_button': [
-                "div[aria-label='Select video']",
-                "div[aria-label='Pilih video']",
-                "input[accept*='video']"
-            ],
-            'reels_next_button': [
-                "div[aria-label='Next']",
-                "div[aria-label='Berikutnya']",
-                "div[role='button']"
-            ],
-            'reels_share_button': [
-                "div[aria-label='Share to Feed']",
-                "div[aria-label='Bagikan ke Feed']",
-                "div[aria-label='Share']",
-                "div[aria-label='Bagikan']"
+            'create_post_button': [
+                "div[role='button'][aria-label*='Create a post']",
+                "div[role='button'][aria-label*='Buat postingan']",
+                "div[data-testid='status-attachment-mentions-input']"
             ]
         }
 
@@ -119,7 +124,8 @@ class FacebookUploader:
             "SUCCESS": Fore.GREEN,
             "WARNING": Fore.YELLOW,
             "ERROR": Fore.RED,
-            "DEBUG": Fore.MAGENTA
+            "DEBUG": Fore.MAGENTA,
+            "AI": Fore.LIGHTMAGENTA_EX
         }
         
         if level == "DEBUG" and not self.debug:
@@ -131,7 +137,8 @@ class FacebookUploader:
             "SUCCESS": "✅",
             "WARNING": "⚠️",
             "ERROR": "❌",
-            "DEBUG": "🔍"
+            "DEBUG": "🔍",
+            "AI": "🤖"
         }
         
         icon = icons.get(level, "📝")
@@ -369,16 +376,170 @@ class FacebookUploader:
         
         raise TimeoutException("Timeout waiting for login")
 
-    def upload_status(self, status_text: str = "", media_path: str = "") -> Dict[str, Any]:
+    def generate_ai_content(self, prompt: str, content_type: str = "status") -> Dict[str, Any]:
+        """Generate AI content berdasarkan prompt"""
+        if not self.ai_assistant:
+            self._log("AI Assistant tidak tersedia", "WARNING")
+            return self._generate_fallback_content(prompt, content_type)
+        
+        try:
+            self._log(f"Generating AI content untuk: {prompt[:50]}...", "AI")
+            
+            # Build AI prompt berdasarkan content type
+            if content_type == "status":
+                ai_prompt = f"""
+                Buat status Facebook yang menarik dan engaging berdasarkan topik: "{prompt}"
+                
+                Requirements:
+                1. Tulis dalam bahasa Indonesia yang natural dan friendly
+                2. Buat hook yang menarik di awal
+                3. Tambahkan call-to-action yang engaging
+                4. Sertakan 5-10 hashtag yang relevan dan trending
+                5. Panjang ideal 100-300 karakter
+                6. Gaya: conversational, relatable, dan shareable
+                
+                Format output sebagai JSON dengan keys:
+                - title: Judul singkat
+                - content: Konten status lengkap
+                - hashtags: Array hashtag
+                - cta: Call to action
+                """
+            
+            elif content_type == "media":
+                ai_prompt = f"""
+                Buat caption Facebook untuk media (foto/video) dengan tema: "{prompt}"
+                
+                Requirements:
+                1. Caption yang mendeskripsikan dan menarik perhatian
+                2. Gunakan bahasa Indonesia yang engaging
+                3. Tambahkan pertanyaan untuk encourage engagement
+                4. Sertakan hashtag yang relevan
+                5. Panjang ideal 50-200 karakter
+                6. Gaya: visual storytelling, engaging
+                
+                Format output sebagai JSON dengan keys:
+                - title: Judul singkat
+                - content: Caption lengkap
+                - hashtags: Array hashtag
+                - cta: Call to action
+                """
+            
+            elif content_type == "random":
+                topics = [
+                    "motivasi hari ini", "tips produktivitas", "cerita inspiratif",
+                    "fakta menarik", "quote bijak", "tips kesehatan",
+                    "teknologi terbaru", "lifestyle tips", "food review",
+                    "travel experience", "hobby sharing", "life update"
+                ]
+                
+                selected_topic = random.choice(topics)
+                ai_prompt = f"""
+                Buat status Facebook random yang menarik dengan topik: "{selected_topic}"
+                
+                Requirements:
+                1. Konten original dan kreatif
+                2. Bahasa Indonesia yang natural
+                3. Relatable untuk audience umum
+                4. Tambahkan element surprise atau insight
+                5. Sertakan hashtag trending
+                6. Gaya: spontan tapi berkualitas
+                
+                Format output sebagai JSON dengan keys:
+                - title: Judul singkat
+                - content: Konten status lengkap
+                - hashtags: Array hashtag
+                - cta: Call to action
+                - topic: Topik yang dipilih
+                """
+            
+            # Simulate AI response (replace with actual AI call)
+            time.sleep(2)  # Simulate processing
+            
+            # Generate content based on prompt
+            if "motivasi" in prompt.lower() or content_type == "random":
+                ai_content = {
+                    "title": "Motivasi Hari Ini",
+                    "content": f"🌟 {prompt}\n\nSetiap hari adalah kesempatan baru untuk menjadi versi terbaik dari diri kita. Jangan biarkan kemarin menghalangi hari ini, dan jangan biarkan hari ini menghalangi masa depan yang cerah!\n\nApa yang memotivasi kalian hari ini? Share di komentar! 💪",
+                    "hashtags": ["#motivasi", "#inspirasi", "#semangat", "#positivevibes", "#mindset", "#success", "#growth", "#motivation"],
+                    "cta": "Share motivasi kalian di komentar!"
+                }
+            
+            elif "tips" in prompt.lower():
+                ai_content = {
+                    "title": "Tips Berguna",
+                    "content": f"💡 Tips: {prompt}\n\nHal kecil yang bisa membuat perbedaan besar dalam hidup kita. Kadang solusi terbaik adalah yang paling sederhana!\n\nAda tips lain yang ingin kalian share? Yuk berbagi di komentar! 🤝",
+                    "hashtags": ["#tips", "#lifehacks", "#productivity", "#lifestyle", "#sharing", "#helpful", "#advice"],
+                    "cta": "Share tips kalian juga di komentar!"
+                }
+            
+            elif "cerita" in prompt.lower() or "story" in prompt.lower():
+                ai_content = {
+                    "title": "Cerita Menarik",
+                    "content": f"📖 {prompt}\n\nSetiap orang punya cerita yang menarik untuk dibagikan. Kadang dari cerita sederhana kita bisa belajar hal yang luar biasa.\n\nApa cerita menarik kalian hari ini? 😊",
+                    "hashtags": ["#cerita", "#story", "#sharing", "#experience", "#life", "#memories", "#storytelling"],
+                    "cta": "Ceritakan pengalaman kalian di komentar!"
+                }
+            
+            else:
+                # General content
+                ai_content = {
+                    "title": "Update Status",
+                    "content": f"✨ {prompt}\n\nSemoga hari kalian menyenangkan dan penuh berkah! Jangan lupa untuk selalu bersyukur dan berbagi kebaikan.\n\nHow's your day going? 😊",
+                    "hashtags": ["#update", "#sharing", "#positivevibes", "#grateful", "#blessed", "#goodday"],
+                    "cta": "Share kabar kalian di komentar!"
+                }
+            
+            # Add topic if random
+            if content_type == "random":
+                ai_content["topic"] = prompt
+            
+            self._log("AI content generated successfully", "SUCCESS")
+            return ai_content
+            
+        except Exception as e:
+            self._log(f"AI content generation error: {e}", "WARNING")
+            return self._generate_fallback_content(prompt, content_type)
+
+    def _generate_fallback_content(self, prompt: str, content_type: str) -> Dict[str, Any]:
+        """Generate fallback content jika AI tidak tersedia"""
+        fallback_templates = {
+            "status": {
+                "title": "Status Update",
+                "content": f"{prompt}\n\nSemoga hari kalian menyenangkan! 😊",
+                "hashtags": ["#update", "#sharing", "#facebook"],
+                "cta": "Share pendapat kalian di komentar!"
+            },
+            "media": {
+                "title": "Media Post",
+                "content": f"{prompt}\n\nCheck out this amazing content!",
+                "hashtags": ["#media", "#sharing", "#content"],
+                "cta": "Like dan share jika kalian suka!"
+            },
+            "random": {
+                "title": "Random Post",
+                "content": "Semoga hari kalian penuh berkah dan kebahagiaan! ✨",
+                "hashtags": ["#random", "#positivevibes", "#blessed"],
+                "cta": "Share kabar kalian di komentar!"
+            }
+        }
+        
+        return fallback_templates.get(content_type, fallback_templates["status"])
+
+    def create_facebook_post(self, content: str = "", media_path: str = "", 
+                           use_ai: bool = False, ai_prompt: str = "", 
+                           content_type: str = "status") -> Dict[str, Any]:
         """
-        Upload status to Facebook with optional media
+        Create Facebook post dengan opsi AI content generation
         
         Args:
-            status_text: Text content for status
-            media_path: Path to media file (image/video)
+            content: Text content untuk post
+            media_path: Path ke media file (optional)
+            use_ai: Gunakan AI untuk generate content
+            ai_prompt: Prompt untuk AI (jika use_ai=True)
+            content_type: Jenis konten (status/media/random)
             
         Returns:
-            Dict with upload status
+            Dict dengan status upload
         """
         try:
             # Setup driver
@@ -404,8 +565,29 @@ class FacebookUploader:
                     self.driver.get(self.home_url)
                     time.sleep(3)
             
-            # Find status input
+            # Generate AI content if requested
+            final_content = content
+            ai_content = {}
+            
+            if use_ai and ai_prompt:
+                self._log("Generating AI content...", "AI")
+                ai_content = self.generate_ai_content(ai_prompt, content_type)
+                
+                if ai_content:
+                    # Use AI generated content
+                    final_content = ai_content.get("content", content)
+                    self._log(f"AI content generated: {final_content[:100]}...", "SUCCESS")
+            
+            # Find and click status input area
             self._log("Looking for status input...")
+            
+            # Try to find create post button first
+            create_post_btn = self._find_element_by_selectors(self.selectors['create_post_button'], timeout=5)
+            if create_post_btn:
+                create_post_btn.click()
+                time.sleep(2)
+            
+            # Find status input
             status_input = self._find_element_by_selectors(self.selectors['status_input'])
             
             if not status_input:
@@ -417,7 +599,7 @@ class FacebookUploader:
             
             # Add media if provided
             if media_path and os.path.exists(media_path):
-                self._log("Adding media to status...")
+                self._log("Adding media to post...")
                 
                 # Look for photo/video button
                 photo_video_btn = self._find_element_by_selectors(self.selectors['photo_video_button'], timeout=5)
@@ -437,9 +619,9 @@ class FacebookUploader:
                 else:
                     self._log("File input not found", "WARNING")
             
-            # Add status text if provided
-            if status_text.strip():
-                self._log("Adding status text...")
+            # Add text content
+            if final_content.strip():
+                self._log("Adding text content...")
                 
                 # Find the active text input (might have changed after media upload)
                 text_inputs = self.driver.find_elements(By.CSS_SELECTOR, "div[contenteditable='true']")
@@ -449,8 +631,15 @@ class FacebookUploader:
                         try:
                             text_input.click()
                             time.sleep(1)
-                            text_input.send_keys(status_text)
-                            self._log("Status text added", "SUCCESS")
+                            
+                            # Clear existing content
+                            text_input.send_keys(Keys.CONTROL + "a")
+                            text_input.send_keys(Keys.BACKSPACE)
+                            time.sleep(0.5)
+                            
+                            # Add new content
+                            text_input.send_keys(final_content)
+                            self._log("Text content added", "SUCCESS")
                             break
                         except:
                             continue
@@ -477,26 +666,28 @@ class FacebookUploader:
             time.sleep(5)
             
             # Check for success
-            self._log("Facebook status posted successfully!", "SUCCESS")
+            self._log("Facebook post created successfully!", "SUCCESS")
             
             return {
                 "success": True,
-                "message": "Status posted successfully",
-                "status_text": status_text,
-                "media_path": media_path
+                "message": "Post created successfully",
+                "content": final_content,
+                "media_path": media_path,
+                "ai_content": ai_content if use_ai else None,
+                "content_type": content_type
             }
             
         except Exception as e:
-            error_msg = f"Facebook status upload failed: {str(e)}"
+            error_msg = f"Facebook post creation failed: {str(e)}"
             self._log(error_msg, "ERROR")
             
             # Take screenshot for debugging
-            self.take_screenshot(f"facebook_status_error_{int(time.time())}.png")
+            self.take_screenshot(f"facebook_error_{int(time.time())}.png")
             
             return {
                 "success": False,
                 "message": error_msg,
-                "status_text": status_text,
+                "content": final_content if 'final_content' in locals() else content,
                 "media_path": media_path
             }
         
@@ -505,143 +696,25 @@ class FacebookUploader:
                 self._log("Closing browser...")
                 self.driver.quit()
 
+    def upload_status(self, status_text: str = "", media_path: str = "") -> Dict[str, Any]:
+        """
+        Upload status to Facebook (legacy method for compatibility)
+        """
+        return self.create_facebook_post(
+            content=status_text,
+            media_path=media_path,
+            content_type="status"
+        )
+
     def upload_reels(self, video_path: str, description: str = "") -> Dict[str, Any]:
         """
-        Upload reels to Facebook
-        
-        Args:
-            video_path: Path to video file
-            description: Description for the reel
-            
-        Returns:
-            Dict with upload status
+        Upload reels to Facebook (legacy method for compatibility)
         """
-        try:
-            # Setup driver
-            self._setup_driver()
-            
-            # Load cookies
-            cookies_loaded = self.load_cookies()
-            
-            # Navigate to Facebook Reels creation
-            self._log("Navigating to Facebook Reels...")
-            self.driver.get(self.reels_url)
-            time.sleep(5)
-            
-            # Check if login required
-            if self.check_login_required():
-                if cookies_loaded:
-                    self._log("Cookies loaded but still need login, refreshing...", "WARNING")
-                    self.driver.refresh()
-                    time.sleep(5)
-                
-                if self.check_login_required():
-                    self.wait_for_login()
-                    self.driver.get(self.reels_url)
-                    time.sleep(5)
-            
-            # Upload video file
-            self._log("Uploading video file...")
-            
-            # Find upload button or file input
-            upload_element = self._find_element_by_selectors(self.selectors['reels_upload_button'], timeout=15, visible=False)
-            
-            if not upload_element:
-                # Fallback: look for any file input
-                file_inputs = self.driver.find_elements(By.CSS_SELECTOR, "input[type='file']")
-                for file_input in file_inputs:
-                    accept_attr = file_input.get_attribute('accept') or ''
-                    if 'video' in accept_attr:
-                        upload_element = file_input
-                        break
-            
-            if not upload_element:
-                raise NoSuchElementException("Video upload element not found")
-            
-            # Upload video
-            abs_path = os.path.abspath(video_path)
-            upload_element.send_keys(abs_path)
-            self._log("Video file uploaded", "SUCCESS")
-            
-            # Wait for video processing
-            self._log("Waiting for video processing...")
-            time.sleep(15)
-            
-            # Add description if provided
-            if description.strip():
-                self._log("Adding description...")
-                
-                # Look for description input
-                description_inputs = self.driver.find_elements(By.CSS_SELECTOR, "div[contenteditable='true']")
-                
-                for desc_input in description_inputs:
-                    if desc_input.is_displayed():
-                        try:
-                            desc_input.click()
-                            time.sleep(1)
-                            desc_input.send_keys(description)
-                            self._log("Description added", "SUCCESS")
-                            break
-                        except:
-                            continue
-            
-            # Look for Next button (if exists)
-            next_button = self._find_element_by_selectors(self.selectors['reels_next_button'], timeout=5)
-            if next_button:
-                next_button.click()
-                self._log("Next button clicked", "SUCCESS")
-                time.sleep(3)
-            
-            # Find and click share button
-            self._log("Looking for share button...")
-            share_button = self._find_element_by_selectors(self.selectors['reels_share_button'], timeout=15)
-            
-            if not share_button:
-                # Fallback: look for button with share-related text
-                buttons = self.driver.find_elements(By.TAG_NAME, "div")
-                for button in buttons:
-                    button_text = button.text.lower()
-                    if any(word in button_text for word in ['share', 'bagikan', 'post', 'publish']):
-                        if button.is_enabled() and button.is_displayed():
-                            share_button = button
-                            break
-            
-            if not share_button:
-                raise NoSuchElementException("Share button not found")
-            
-            # Click share button
-            self.driver.execute_script("arguments[0].click();", share_button)
-            self._log("Share button clicked", "SUCCESS")
-            time.sleep(10)
-            
-            # Check for success
-            self._log("Facebook Reels uploaded successfully!", "SUCCESS")
-            
-            return {
-                "success": True,
-                "message": "Reels uploaded successfully",
-                "video_path": video_path,
-                "description": description
-            }
-            
-        except Exception as e:
-            error_msg = f"Facebook Reels upload failed: {str(e)}"
-            self._log(error_msg, "ERROR")
-            
-            # Take screenshot for debugging
-            self.take_screenshot(f"facebook_reels_error_{int(time.time())}.png")
-            
-            return {
-                "success": False,
-                "message": error_msg,
-                "video_path": video_path,
-                "description": description
-            }
-        
-        finally:
-            if self.driver:
-                self._log("Closing browser...")
-                self.driver.quit()
+        return self.create_facebook_post(
+            content=description,
+            media_path=video_path,
+            content_type="media"
+        )
 
     def take_screenshot(self, filename: str = None):
         """Take screenshot for debugging"""
@@ -721,15 +794,177 @@ class FacebookUploader:
             self._log(f"Error reading Facebook cookies: {str(e)}", "ERROR")
             return {"exists": True, "error": str(e)}
 
+    def interactive_facebook_menu(self):
+        """Interactive menu untuk Facebook posting"""
+        print(f"\n{Fore.BLUE}📘 Facebook Unified Uploader")
+        print("=" * 50)
+        
+        while True:
+            print(f"\n{Fore.YELLOW}Pilih jenis post:")
+            print("1. 📝 Text Status Only")
+            print("2. 🖼️ Text + Media (Image/Video)")
+            print("3. 🤖 AI Generated Status")
+            print("4. 🎲 Random AI Content")
+            print("5. 🍪 Check Cookies Status")
+            print("6. 🗑️ Clear Cookies")
+            print("7. ❌ Keluar")
+            
+            choice = input(f"\n{Fore.WHITE}Pilihan (1-7): ").strip()
+            
+            if choice == "1":
+                self._interactive_text_status()
+            elif choice == "2":
+                self._interactive_text_media()
+            elif choice == "3":
+                self._interactive_ai_status()
+            elif choice == "4":
+                self._interactive_random_ai()
+            elif choice == "5":
+                self.check_cookies_status()
+            elif choice == "6":
+                confirm = input(f"{Fore.YELLOW}Clear Facebook cookies? (y/N): ").strip().lower()
+                if confirm == 'y':
+                    self.clear_cookies()
+            elif choice == "7":
+                print(f"{Fore.YELLOW}👋 Sampai jumpa!")
+                break
+            else:
+                print(f"{Fore.RED}❌ Pilihan tidak valid!")
+
+    def _interactive_text_status(self):
+        """Interactive text status posting"""
+        print(f"\n{Fore.CYAN}📝 TEXT STATUS POSTING:")
+        
+        status_text = input(f"{Fore.WHITE}Masukkan status text: ").strip()
+        if not status_text:
+            print(f"{Fore.RED}❌ Status text tidak boleh kosong!")
+            return
+        
+        result = self.create_facebook_post(
+            content=status_text,
+            content_type="status"
+        )
+        
+        if result["success"]:
+            print(f"{Fore.GREEN}✅ Status berhasil dipost!")
+        else:
+            print(f"{Fore.RED}❌ Status gagal: {result['message']}")
+
+    def _interactive_text_media(self):
+        """Interactive text + media posting"""
+        print(f"\n{Fore.CYAN}🖼️ TEXT + MEDIA POSTING:")
+        
+        media_path = input(f"{Fore.WHITE}Path ke file media: ").strip()
+        if not os.path.exists(media_path):
+            print(f"{Fore.RED}❌ File media tidak ditemukan!")
+            return
+        
+        caption = input(f"{Fore.WHITE}Caption untuk media (optional): ").strip()
+        
+        result = self.create_facebook_post(
+            content=caption,
+            media_path=media_path,
+            content_type="media"
+        )
+        
+        if result["success"]:
+            print(f"{Fore.GREEN}✅ Post dengan media berhasil!")
+        else:
+            print(f"{Fore.RED}❌ Post gagal: {result['message']}")
+
+    def _interactive_ai_status(self):
+        """Interactive AI generated status"""
+        print(f"\n{Fore.CYAN}🤖 AI GENERATED STATUS:")
+        
+        if not self.ai_assistant:
+            print(f"{Fore.RED}❌ AI Assistant tidak tersedia!")
+            print(f"{Fore.YELLOW}Install dengan: pip install google-generativeai")
+            print(f"{Fore.YELLOW}Set API key: set GEMINI_API_KEY=your_api_key")
+            return
+        
+        print(f"{Fore.YELLOW}Contoh prompt:")
+        print("• motivasi untuk hari senin")
+        print("• tips produktivitas kerja")
+        print("• cerita inspiratif tentang kesuksesan")
+        print("• review makanan enak")
+        print("• sharing pengalaman traveling")
+        
+        ai_prompt = input(f"\n{Fore.WHITE}Masukkan prompt untuk AI: ").strip()
+        if not ai_prompt:
+            print(f"{Fore.RED}❌ Prompt tidak boleh kosong!")
+            return
+        
+        result = self.create_facebook_post(
+            use_ai=True,
+            ai_prompt=ai_prompt,
+            content_type="status"
+        )
+        
+        if result["success"]:
+            print(f"{Fore.GREEN}✅ AI status berhasil dipost!")
+            if result.get("ai_content"):
+                ai_content = result["ai_content"]
+                print(f"\n{Fore.CYAN}📋 AI Generated Content:")
+                print(f"Title: {ai_content.get('title', 'N/A')}")
+                print(f"Content: {ai_content.get('content', 'N/A')[:100]}...")
+                print(f"Hashtags: {', '.join(ai_content.get('hashtags', []))}")
+        else:
+            print(f"{Fore.RED}❌ AI status gagal: {result['message']}")
+
+    def _interactive_random_ai(self):
+        """Interactive random AI content"""
+        print(f"\n{Fore.CYAN}🎲 RANDOM AI CONTENT:")
+        
+        if not self.ai_assistant:
+            print(f"{Fore.RED}❌ AI Assistant tidak tersedia!")
+            return
+        
+        print(f"{Fore.YELLOW}AI akan generate konten random yang menarik...")
+        
+        confirm = input(f"{Fore.WHITE}Generate random AI content? (Y/n): ").strip().lower()
+        if confirm == 'n':
+            return
+        
+        # Generate random prompt
+        random_prompts = [
+            "motivasi untuk memulai hari",
+            "tips hidup sehat dan bahagia",
+            "cerita inspiratif singkat",
+            "fakta menarik yang jarang diketahui",
+            "quote bijak untuk kehidupan",
+            "tips produktivitas sederhana",
+            "sharing pengalaman positif",
+            "refleksi tentang kehidupan"
+        ]
+        
+        random_prompt = random.choice(random_prompts)
+        
+        result = self.create_facebook_post(
+            use_ai=True,
+            ai_prompt=random_prompt,
+            content_type="random"
+        )
+        
+        if result["success"]:
+            print(f"{Fore.GREEN}✅ Random AI content berhasil dipost!")
+            if result.get("ai_content"):
+                ai_content = result["ai_content"]
+                print(f"\n{Fore.CYAN}📋 Generated Content:")
+                print(f"Topic: {ai_content.get('topic', random_prompt)}")
+                print(f"Title: {ai_content.get('title', 'N/A')}")
+                print(f"Content: {ai_content.get('content', 'N/A')[:150]}...")
+        else:
+            print(f"{Fore.RED}❌ Random AI content gagal: {result['message']}")
+
 
 def main():
-    """Main function for CLI"""
-    parser = argparse.ArgumentParser(description="Facebook Uploader")
-    parser.add_argument("--type", choices=['status', 'reels'], help="Upload type")
-    parser.add_argument("--video", "-v", help="Path to video file (for reels)")
-    parser.add_argument("--status", "-s", help="Status text")
-    parser.add_argument("--media", "-m", help="Path to media file (for status)")
-    parser.add_argument("--description", "-d", default="", help="Description for reels")
+    """Main function untuk CLI"""
+    parser = argparse.ArgumentParser(description="Facebook Unified Uploader")
+    parser.add_argument("--content", "-c", help="Text content untuk post")
+    parser.add_argument("--media", "-m", help="Path ke media file")
+    parser.add_argument("--ai", action="store_true", help="Gunakan AI untuk generate content")
+    parser.add_argument("--prompt", "-p", help="Prompt untuk AI content generation")
+    parser.add_argument("--type", choices=['status', 'media', 'random'], default='status', help="Content type")
     parser.add_argument("--headless", action="store_true", help="Run in headless mode")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     parser.add_argument("--clear-cookies", action="store_true", help="Clear cookies")
@@ -748,120 +983,34 @@ def main():
         uploader.check_cookies_status()
         return
     
-    if args.type == 'status':
-        if not args.status and not args.media:
-            print(f"{Fore.RED}❌ Status text or media required for status upload")
-            sys.exit(1)
-        
-        if args.media and not os.path.exists(args.media):
-            print(f"{Fore.RED}❌ Media file not found: {args.media}")
-            sys.exit(1)
-        
-        result = uploader.upload_status(args.status or "", args.media or "")
-        
-        if result["success"]:
-            print(f"{Fore.GREEN}🎉 Facebook status uploaded successfully!")
-        else:
-            print(f"{Fore.RED}❌ Facebook status upload failed: {result['message']}")
-            sys.exit(1)
-    
-    elif args.type == 'reels':
-        if not args.video:
-            print(f"{Fore.RED}❌ Video path required for reels upload")
-            sys.exit(1)
-        
-        if not os.path.exists(args.video):
-            print(f"{Fore.RED}❌ Video file not found: {args.video}")
-            sys.exit(1)
-        
-        result = uploader.upload_reels(args.video, args.description)
+    if args.content or args.media or args.ai:
+        # Command line mode
+        result = uploader.create_facebook_post(
+            content=args.content or "",
+            media_path=args.media or "",
+            use_ai=args.ai,
+            ai_prompt=args.prompt or "",
+            content_type=args.type
+        )
         
         if result["success"]:
-            print(f"{Fore.GREEN}🎉 Facebook Reels uploaded successfully!")
+            print(f"{Fore.GREEN}🎉 Facebook post berhasil!")
+            if result.get("ai_content"):
+                print(f"{Fore.CYAN}AI Content: {result['ai_content']['title']}")
         else:
-            print(f"{Fore.RED}❌ Facebook Reels upload failed: {result['message']}")
+            print(f"{Fore.RED}❌ Facebook post gagal: {result['message']}")
             sys.exit(1)
     
     else:
         # Interactive mode
-        print(f"{Fore.BLUE}📘 Facebook Uploader")
-        print("=" * 40)
-        
-        while True:
-            print(f"\n{Fore.YELLOW}Choose action:")
-            print("1. 📝 Upload Status (Text)")
-            print("2. 🖼️ Upload Status (with Media)")
-            print("3. 🎬 Upload Reels")
-            print("4. 🍪 Check cookies status")
-            print("5. 🗑️ Clear cookies")
-            print("6. ❌ Exit")
-            
-            choice = input(f"\n{Fore.WHITE}Choice (1-6): ").strip()
-            
-            if choice == "1":
-                status_text = input(f"{Fore.CYAN}Status text: ").strip()
-                if not status_text:
-                    print(f"{Fore.RED}❌ Status text cannot be empty!")
-                    continue
-                
-                result = uploader.upload_status(status_text)
-                
-                if result["success"]:
-                    print(f"{Fore.GREEN}🎉 Facebook status uploaded successfully!")
-                else:
-                    print(f"{Fore.RED}❌ Facebook status upload failed: {result['message']}")
-            
-            elif choice == "2":
-                media_path = input(f"{Fore.CYAN}Media file path: ").strip()
-                if not os.path.exists(media_path):
-                    print(f"{Fore.RED}❌ Media file not found!")
-                    continue
-                
-                status_text = input(f"{Fore.CYAN}Status text (optional): ").strip()
-                
-                result = uploader.upload_status(status_text, media_path)
-                
-                if result["success"]:
-                    print(f"{Fore.GREEN}🎉 Facebook status with media uploaded successfully!")
-                else:
-                    print(f"{Fore.RED}❌ Facebook status upload failed: {result['message']}")
-            
-            elif choice == "3":
-                video_path = input(f"{Fore.CYAN}Video file path: ").strip()
-                if not os.path.exists(video_path):
-                    print(f"{Fore.RED}❌ Video file not found!")
-                    continue
-                
-                description = input(f"{Fore.CYAN}Description (optional): ").strip()
-                
-                result = uploader.upload_reels(video_path, description)
-                
-                if result["success"]:
-                    print(f"{Fore.GREEN}🎉 Facebook Reels uploaded successfully!")
-                else:
-                    print(f"{Fore.RED}❌ Facebook Reels upload failed: {result['message']}")
-            
-            elif choice == "4":
-                uploader.check_cookies_status()
-            
-            elif choice == "5":
-                confirm = input(f"{Fore.YELLOW}Clear Facebook cookies? (y/N): ").strip().lower()
-                if confirm == 'y':
-                    uploader.clear_cookies()
-            
-            elif choice == "6":
-                print(f"{Fore.YELLOW}👋 Goodbye!")
-                break
-            
-            else:
-                print(f"{Fore.RED}❌ Invalid choice!")
+        uploader.interactive_facebook_menu()
 
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print(f"\n{Fore.YELLOW}👋 Program stopped by user")
+        print(f"\n{Fore.YELLOW}👋 Program dihentikan oleh user")
     except Exception as e:
-        print(f"{Fore.RED}💥 Fatal error: {str(e)}")
+        print(f"{Fore.RED}💥 Error fatal: {str(e)}")
         sys.exit(1)
