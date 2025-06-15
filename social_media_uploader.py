@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-Social Media Uploader - SIMPLIFIED VERSION
+Social Media Uploader - ENHANCED VERSION
 Upload ke TikTok, Facebook, YouTube, Instagram dengan dukungan AI content generation,
 video enhancement, dan video downloader terintegrasi
+Support untuk FILE VIDEO LOKAL atau LINK VIDEO SOSMED
 """
 
 import os
@@ -19,6 +20,14 @@ import argparse
 
 # Initialize colorama
 init(autoreset=True)
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
 
 # Import modules dengan error handling
 try:
@@ -63,6 +72,9 @@ class SocialMediaUploader:
         self.edited_videos_dir = self.base_dir / "edited_videos"
         self.edited_videos_dir.mkdir(exist_ok=True)
         
+        # Load environment variables
+        self._load_env_file()
+        
         # Initialize components
         self.video_downloader = VideoDownloader(debug=debug) if UPLOADERS_AVAILABLE else None
         self.ai_assistant = GeminiAIAssistant(debug=debug) if AI_AVAILABLE else None
@@ -71,7 +83,7 @@ class SocialMediaUploader:
         # Initialize uploaders dengan proper parameters
         self.tiktok_uploader = TikTokUploader(debug=debug) if UPLOADERS_AVAILABLE else None
         self.facebook_uploader = FacebookUploader(debug=debug) if UPLOADERS_AVAILABLE else None
-        self.youtube_uploader = YouTubeAPIUploader(debug=debug) if UPLOADERS_AVAILABLE else None  # Fixed: no headless parameter
+        self.youtube_uploader = YouTubeAPIUploader(debug=debug) if UPLOADERS_AVAILABLE else None
         self.instagram_uploader = InstagramUploader(debug=debug) if UPLOADERS_AVAILABLE else None
 
     def _log(self, message: str, level: str = "INFO"):
@@ -83,7 +95,8 @@ class SocialMediaUploader:
             "ERROR": Fore.RED,
             "DEBUG": Fore.MAGENTA,
             "HEADER": Fore.LIGHTBLUE_EX,
-            "PIPELINE": Fore.LIGHTMAGENTA_EX
+            "PIPELINE": Fore.LIGHTMAGENTA_EX,
+            "DOWNLOAD": Fore.LIGHTBLUE_EX
         }
         
         if level == "DEBUG" and not self.debug:
@@ -97,11 +110,157 @@ class SocialMediaUploader:
             "ERROR": "❌",
             "DEBUG": "🔍",
             "HEADER": "🚀",
-            "PIPELINE": "⚙️"
+            "PIPELINE": "⚙️",
+            "DOWNLOAD": "📥"
         }
         
         icon = icons.get(level, "📝")
         print(f"{color}{icon} {message}{Style.RESET_ALL}")
+
+    def _load_env_file(self):
+        """Load environment variables from .env file"""
+        env_file = self.base_dir / ".env"
+        
+        if env_file.exists():
+            try:
+                with open(env_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#') and '=' in line:
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            value = value.strip().strip('"').strip("'")
+                            os.environ[key] = value
+                
+                if self.debug:
+                    self._log("Environment variables loaded from .env file", "SUCCESS")
+            except Exception as e:
+                if self.debug:
+                    self._log(f"Error loading .env file: {e}", "WARNING")
+
+    def is_video_url(self, input_string: str) -> bool:
+        """Check if input is a video URL"""
+        if not input_string:
+            return False
+        
+        # Check if it's a URL
+        try:
+            parsed = urlparse(input_string)
+            if not parsed.scheme or not parsed.netloc:
+                return False
+        except:
+            return False
+        
+        # Check for known video platforms
+        video_platforms = [
+            'youtube.com', 'youtu.be', 'youtube-nocookie.com',
+            'tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com',
+            'facebook.com', 'fb.watch', 'fb.com',
+            'instagram.com', 'instagr.am',
+            'twitter.com', 't.co', 'x.com',
+            'vimeo.com', 'dailymotion.com', 'twitch.tv'
+        ]
+        
+        return any(platform in input_string.lower() for platform in video_platforms)
+
+    def get_video_source(self, prompt_message: str = "Video source") -> tuple[str, str]:
+        """
+        Get video source dari user (file atau URL)
+        
+        Returns:
+            tuple: (video_path, source_type) where source_type is 'file' or 'url'
+        """
+        print(f"\n{Fore.YELLOW}📹 {prompt_message}:")
+        print("=" * 50)
+        print("1. 📁 File video lokal")
+        print("2. 🔗 Link video sosmed (YouTube, TikTok, Facebook, Instagram, dll)")
+        print("3. ❌ Kembali")
+        
+        choice = input(f"\n{Fore.WHITE}Pilihan (1-3): ").strip()
+        
+        if choice == "1":
+            # File video lokal
+            video_path = input(f"{Fore.CYAN}Path ke file video: ").strip()
+            
+            # Remove quotes if present
+            video_path = video_path.strip('"').strip("'")
+            
+            if not os.path.exists(video_path):
+                self._log("File video tidak ditemukan!", "ERROR")
+                return None, None
+            
+            # Validate video file
+            video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv', '.wmv', '.m4v']
+            if not any(video_path.lower().endswith(ext) for ext in video_extensions):
+                self._log("File bukan format video yang didukung!", "ERROR")
+                self._log(f"Format yang didukung: {', '.join(video_extensions)}", "INFO")
+                return None, None
+            
+            file_size = os.path.getsize(video_path) / (1024 * 1024)  # MB
+            self._log(f"File video ditemukan: {os.path.basename(video_path)} ({file_size:.2f}MB)", "SUCCESS")
+            
+            return video_path, "file"
+        
+        elif choice == "2":
+            # Link video sosmed
+            video_url = input(f"{Fore.CYAN}URL video: ").strip()
+            
+            if not video_url:
+                self._log("URL tidak boleh kosong!", "ERROR")
+                return None, None
+            
+            if not self.is_video_url(video_url):
+                self._log("URL tidak valid atau platform tidak didukung!", "ERROR")
+                self._log("Platform yang didukung: YouTube, TikTok, Facebook, Instagram, Twitter, Vimeo, dll", "INFO")
+                return None, None
+            
+            if not self.video_downloader:
+                self._log("Video downloader tidak tersedia!", "ERROR")
+                return None, None
+            
+            # Download video
+            self._log("Downloading video dari URL...", "DOWNLOAD")
+            
+            # Detect platform untuk optimasi download
+            platform = self.video_downloader.detect_platform(video_url)
+            self._log(f"Platform terdeteksi: {platform}", "INFO")
+            
+            # Get video info first
+            info = self.video_downloader.get_video_info(video_url)
+            if "error" not in info:
+                self._log(f"Video: {info.get('title', 'Unknown')[:50]}...", "INFO")
+                self._log(f"Durasi: {info.get('duration', 0):.0f} detik", "INFO")
+                self._log(f"Platform: {info.get('platform', 'unknown')}", "INFO")
+            
+            # Choose quality
+            print(f"\n{Fore.YELLOW}Pilih kualitas download:")
+            print("1. 🔥 Best (Kualitas terbaik)")
+            print("2. ⚡ High (1080p)")
+            print("3. 📱 Medium (720p)")
+            print("4. 💾 Low (480p)")
+            
+            quality_choice = input(f"{Fore.WHITE}Pilihan (1-4, default: 2): ").strip()
+            quality_map = {"1": "best", "2": "high", "3": "medium", "4": "low"}
+            quality = quality_map.get(quality_choice, "high")
+            
+            # Download video
+            result = self.video_downloader.download_video(video_url, quality=quality)
+            
+            if result.get("success"):
+                video_path = result["file_path"]
+                self._log(f"Video berhasil didownload: {result['filename']}", "SUCCESS")
+                self._log(f"Size: {result['file_size_mb']:.2f}MB", "INFO")
+                return video_path, "url"
+            else:
+                self._log(f"Download gagal: {result.get('error')}", "ERROR")
+                return None, None
+        
+        elif choice == "3":
+            return None, None
+        
+        else:
+            self._log("Pilihan tidak valid!", "ERROR")
+            return None, None
 
     def check_system_requirements(self):
         """Check system requirements"""
@@ -142,6 +301,7 @@ class SocialMediaUploader:
         print(f"\n{Fore.LIGHTBLUE_EX}🚀 SUPER ADVANCED SOCIAL MEDIA UPLOADER")
         print("=" * 70)
         print(f"{Fore.LIGHTMAGENTA_EX}🎯 Dengan Video + Text + Media Support + AI + FFmpeg + Instagram Integration")
+        print(f"{Fore.LIGHTGREEN_EX}📹 Support: File Video Lokal & Link Video Sosmed")
         print()
         print(f"{Fore.CYAN}💻 System: {os.name.upper()}")
         print()
@@ -169,7 +329,7 @@ class SocialMediaUploader:
         return True
 
     def _smart_upload_pipeline(self):
-        """Smart upload pipeline"""
+        """Smart upload pipeline dengan enhanced video input"""
         print(f"\n{Fore.LIGHTMAGENTA_EX}🚀 SMART UPLOAD PIPELINE")
         print("=" * 60)
         
@@ -189,9 +349,9 @@ class SocialMediaUploader:
         
         print(f"\n{Fore.YELLOW}📹 PILIH JENIS KONTEN:")
         print("=" * 50)
-        print("1. 🎬 Video Content (TikTok, Facebook Reels, YouTube Shorts, Instagram Reels)")
+        print("1. 🎬 Video Content (File/Link → TikTok, Facebook Reels, YouTube Shorts, Instagram Reels)")
         print("2. 📝 Text Status (Facebook Status)")
-        print("3. 🖼️ Image/Media (Facebook Post, Instagram Post)")
+        print("3. 🖼️ Image/Media (File → Facebook Post, Instagram Post)")
         print("4. ❌ Kembali")
         
         choice = input(f"\n{Fore.WHITE}Pilihan (1-4): ").strip()
@@ -208,61 +368,99 @@ class SocialMediaUploader:
             self._log("Pilihan tidak valid!", "ERROR")
 
     def _video_content_pipeline(self):
-        """Video content upload pipeline"""
+        """Enhanced video content upload pipeline dengan file/URL support"""
         print(f"\n{Fore.CYAN}🎬 VIDEO CONTENT PIPELINE")
         print("=" * 40)
         
-        # Get video source
-        print(f"\n{Fore.YELLOW}Pilih sumber video:")
-        print("1. 📁 File video lokal")
-        print("2. 📥 Download dari URL")
-        print("3. ❌ Kembali")
-        
-        choice = input(f"\n{Fore.WHITE}Pilihan (1-3): ").strip()
-        
-        video_path = None
-        
-        if choice == "1":
-            video_path = input(f"{Fore.CYAN}Path ke file video: ").strip()
-            if not os.path.exists(video_path):
-                self._log("File video tidak ditemukan!", "ERROR")
-                return
-        elif choice == "2":
-            if not self.video_downloader:
-                self._log("Video downloader tidak tersedia!", "ERROR")
-                return
-            
-            url = input(f"{Fore.CYAN}URL video: ").strip()
-            if not url:
-                self._log("URL tidak boleh kosong!", "ERROR")
-                return
-            
-            self._log("Downloading video...", "INFO")
-            result = self.video_downloader.download_video(url, quality="high")
-            
-            if result.get("success"):
-                video_path = result["file_path"]
-                self._log(f"Video downloaded: {result['filename']}", "SUCCESS")
-            else:
-                self._log(f"Download failed: {result.get('error')}", "ERROR")
-                return
-        elif choice == "3":
-            return
-        else:
-            self._log("Pilihan tidak valid!", "ERROR")
-            return
+        # Get video source (file atau URL)
+        video_path, source_type = self.get_video_source("PILIH SUMBER VIDEO")
         
         if not video_path:
-            self._log("Video path tidak valid!", "ERROR")
             return
+        
+        self._log(f"Video source: {source_type} - {os.path.basename(video_path)}", "SUCCESS")
+        
+        # Optional: Video enhancement
+        enhanced_video_path = video_path
+        
+        if self.video_editor and self.video_editor.ffmpeg_path:
+            print(f"\n{Fore.YELLOW}🎨 Video Enhancement (Optional):")
+            print("1. ✨ Enhance video quality")
+            print("2. 🕵️ Apply anti-detection")
+            print("3. 📱 Optimize for platforms")
+            print("4. ⏭️ Skip enhancement")
+            
+            enhance_choice = input(f"\n{Fore.WHITE}Pilihan (1-4): ").strip()
+            
+            if enhance_choice == "1":
+                self._log("Enhancing video quality...", "PIPELINE")
+                result = self.video_editor.enhance_video(video_path, preset="medium")
+                if result.get("success"):
+                    enhanced_video_path = result["output_path"]
+                    self._log(f"Video enhanced: {result['file_size_mb']:.2f}MB", "SUCCESS")
+                else:
+                    self._log(f"Enhancement failed: {result.get('error')}", "WARNING")
+            
+            elif enhance_choice == "2":
+                self._log("Applying anti-detection...", "PIPELINE")
+                result = self.video_editor.apply_anti_detection(video_path, intensity="medium")
+                if result.get("success"):
+                    enhanced_video_path = result["output_path"]
+                    self._log(f"Anti-detection applied: {result['file_size_mb']:.2f}MB", "SUCCESS")
+                else:
+                    self._log(f"Anti-detection failed: {result.get('error')}", "WARNING")
+            
+            elif enhance_choice == "3":
+                print(f"\n{Fore.YELLOW}Pilih platform untuk optimasi:")
+                print("1. TikTok")
+                print("2. Instagram")
+                print("3. YouTube")
+                print("4. Facebook")
+                
+                platform_choice = input(f"{Fore.WHITE}Pilihan (1-4): ").strip()
+                platform_map = {"1": "tiktok", "2": "instagram", "3": "youtube", "4": "facebook"}
+                platform = platform_map.get(platform_choice, "tiktok")
+                
+                self._log(f"Optimizing for {platform}...", "PIPELINE")
+                result = self.video_editor.optimize_for_platform(video_path, platform)
+                if result.get("success"):
+                    enhanced_video_path = result["output_path"]
+                    self._log(f"Platform optimization complete: {result['file_size_mb']:.2f}MB", "SUCCESS")
+                else:
+                    self._log(f"Optimization failed: {result.get('error')}", "WARNING")
         
         # Select platforms
         platforms = self._select_platforms()
         if not platforms:
             return
         
+        # Optional: AI content generation
+        ai_content = None
+        if self.ai_assistant:
+            print(f"\n{Fore.YELLOW}🤖 AI Content Generation (Optional):")
+            print("1. 🎯 Generate AI content untuk semua platform")
+            print("2. ⏭️ Skip AI generation")
+            
+            ai_choice = input(f"\n{Fore.WHITE}Pilihan (1-2): ").strip()
+            
+            if ai_choice == "1":
+                self._log("Analyzing video dengan Gemini AI...", "PIPELINE")
+                analysis = self.ai_assistant.analyze_video_content(enhanced_video_path)
+                
+                if analysis:
+                    self._log("Generating platform-specific content...", "PIPELINE")
+                    ai_content = self.ai_assistant.generate_platform_content(analysis, platforms)
+                    
+                    print(f"\n{Fore.GREEN}🎯 AI CONTENT GENERATED:")
+                    for platform in platforms:
+                        if platform in ai_content:
+                            content = ai_content[platform]
+                            print(f"\n{platform.upper()}:")
+                            print(f"  Title: {content.get('title', 'N/A')}")
+                            print(f"  Description: {content.get('description', 'N/A')[:100]}...")
+        
         # Upload to selected platforms
-        self._upload_video_to_platforms(video_path, platforms)
+        self._upload_video_to_platforms(enhanced_video_path, platforms, ai_content)
 
     def _text_status_pipeline(self):
         """Text status pipeline"""
@@ -297,7 +495,7 @@ class SocialMediaUploader:
         elif choice == "2":
             if not self.ai_assistant:
                 self._log("AI Assistant tidak tersedia!", "ERROR")
-                self._log("Set GEMINI_API_KEY environment variable", "INFO")
+                self._log("Buat file .env dengan GEMINI_API_KEY=your_api_key", "INFO")
                 return
             
             prompt = input(f"{Fore.CYAN}Prompt untuk AI: ").strip()
@@ -323,16 +521,68 @@ class SocialMediaUploader:
             self._log("Pilihan tidak valid!", "ERROR")
 
     def _image_media_pipeline(self):
-        """Image/media pipeline"""
+        """Enhanced image/media pipeline"""
         print(f"\n{Fore.CYAN}🖼️ IMAGE/MEDIA PIPELINE")
         print("=" * 40)
         
-        media_path = input(f"{Fore.CYAN}Path ke file media: ").strip()
+        media_path = input(f"{Fore.CYAN}Path ke file media (image/video): ").strip()
+        
+        # Remove quotes if present
+        media_path = media_path.strip('"').strip("'")
+        
         if not os.path.exists(media_path):
             self._log("File media tidak ditemukan!", "ERROR")
             return
         
+        # Validate media file
+        media_extensions = [
+            '.jpg', '.jpeg', '.png', '.gif', '.webp',  # Images
+            '.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv'  # Videos
+        ]
+        
+        if not any(media_path.lower().endswith(ext) for ext in media_extensions):
+            self._log("File bukan format media yang didukung!", "ERROR")
+            self._log(f"Format yang didukung: {', '.join(media_extensions)}", "INFO")
+            return
+        
+        file_size = os.path.getsize(media_path) / (1024 * 1024)  # MB
+        self._log(f"File media ditemukan: {os.path.basename(media_path)} ({file_size:.2f}MB)", "SUCCESS")
+        
+        # Get caption
         caption = input(f"{Fore.CYAN}Caption (optional): ").strip()
+        
+        # Optional: AI caption generation
+        if not caption and self.ai_assistant:
+            print(f"\n{Fore.YELLOW}🤖 Generate AI caption?")
+            print("1. ✨ Yes, generate AI caption")
+            print("2. ⏭️ No, continue without caption")
+            
+            ai_choice = input(f"\n{Fore.WHITE}Pilihan (1-2): ").strip()
+            
+            if ai_choice == "1":
+                # Determine content type
+                is_video = any(media_path.lower().endswith(ext) for ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv'])
+                
+                if is_video:
+                    self._log("Analyzing video untuk AI caption...", "PIPELINE")
+                    analysis = self.ai_assistant.analyze_video_content(media_path)
+                    
+                    # Generate caption based on analysis
+                    ai_post = self.ai_assistant.generate_text_post(
+                        f"video about {', '.join(analysis.get('objects', ['content']))}", 
+                        "instagram"
+                    )
+                    caption = ai_post.get('content', '')
+                    
+                    if caption:
+                        self._log(f"AI caption generated: {caption[:50]}...", "SUCCESS")
+                else:
+                    # For images, generate generic caption
+                    ai_post = self.ai_assistant.generate_text_post("amazing image content", "instagram")
+                    caption = ai_post.get('content', '')
+                    
+                    if caption:
+                        self._log(f"AI caption generated: {caption[:50]}...", "SUCCESS")
         
         # Select platforms
         print(f"\n{Fore.YELLOW}Pilih platform:")
@@ -356,7 +606,7 @@ class SocialMediaUploader:
         elif choice == "2":
             if self.instagram_uploader:
                 # Auto-detect if video or image
-                video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm']
+                video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv']
                 is_reel = any(media_path.lower().endswith(ext) for ext in video_extensions)
                 
                 result = self.instagram_uploader.upload_post(media_path, caption, is_reel)
@@ -379,7 +629,7 @@ class SocialMediaUploader:
                     self._log(f"Facebook post gagal: {result.get('message')}", "ERROR")
             
             if self.instagram_uploader:
-                video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm']
+                video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.flv']
                 is_reel = any(media_path.lower().endswith(ext) for ext in video_extensions)
                 
                 result = self.instagram_uploader.upload_post(media_path, caption, is_reel)
@@ -414,8 +664,8 @@ class SocialMediaUploader:
             self._log("Pilihan tidak valid!", "ERROR")
             return []
 
-    def _upload_video_to_platforms(self, video_path: str, platforms: List[str]):
-        """Upload video ke multiple platforms"""
+    def _upload_video_to_platforms(self, video_path: str, platforms: List[str], ai_content: Dict = None):
+        """Upload video ke multiple platforms dengan AI content"""
         self._log(f"Uploading video ke {len(platforms)} platform(s)...", "PIPELINE")
         
         results = {}
@@ -423,21 +673,28 @@ class SocialMediaUploader:
         for platform in platforms:
             self._log(f"Uploading ke {platform.upper()}...", "INFO")
             
+            # Get AI-generated content for this platform
+            platform_content = ai_content.get(platform, {}) if ai_content else {}
+            title = platform_content.get('title', f"Amazing Video for {platform.title()}")
+            description = platform_content.get('description', f"Check out this amazing content! #{platform} #viral #trending")
+            
             try:
                 if platform == "tiktok" and self.tiktok_uploader:
-                    result = self.tiktok_uploader.upload_video(video_path, "#fyp #viral #trending")
+                    # Use AI-generated hashtags or default
+                    hashtags = " ".join(platform_content.get('hashtags', ['#fyp', '#viral', '#trending']))
+                    result = self.tiktok_uploader.upload_video(video_path, hashtags)
                 
                 elif platform == "facebook" and self.facebook_uploader:
-                    result = self.facebook_uploader.upload_reels(video_path, "Amazing video! #viral")
+                    result = self.facebook_uploader.upload_reels(video_path, description)
                 
                 elif platform == "youtube" and self.youtube_uploader:
                     if not self.youtube_uploader.initialize_youtube_service():
                         result = {"success": False, "message": "YouTube API initialization failed"}
                     else:
-                        result = self.youtube_uploader.upload_shorts(video_path, "Amazing Video", "Check out this video! #Shorts")
+                        result = self.youtube_uploader.upload_shorts(video_path, title, description)
                 
                 elif platform == "instagram" and self.instagram_uploader:
-                    result = self.instagram_uploader.upload_reel(video_path, "Amazing content! #viral #instagram")
+                    result = self.instagram_uploader.upload_reel(video_path, description)
                 
                 else:
                     result = {"success": False, "message": f"Platform {platform} tidak tersedia"}
@@ -468,6 +725,9 @@ class SocialMediaUploader:
         
         if failed:
             print(f"{Fore.RED}❌ Gagal: {', '.join(failed)}")
+        
+        if ai_content:
+            print(f"{Fore.LIGHTMAGENTA_EX}🤖 AI Content digunakan untuk optimasi platform")
 
     def _show_system_status(self):
         """Show system status"""
@@ -493,9 +753,15 @@ class SocialMediaUploader:
         except:
             print(f"FFmpeg: ❌")
         
+        # Check yt-dlp
+        if self.video_downloader and self.video_downloader.ytdlp_path:
+            print(f"yt-dlp: ✅")
+        else:
+            print(f"yt-dlp: ❌")
+        
         # Check API keys
         gemini_api_key = os.getenv('GEMINI_API_KEY')
-        print(f"Gemini API: {'✅' if gemini_api_key else '❌'}")
+        print(f"Gemini API: {'✅' if gemini_api_key and gemini_api_key != 'your_api_key_here' else '❌'}")
         
         # Check disk space
         try:
