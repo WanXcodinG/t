@@ -199,14 +199,15 @@ class UniversalDriverManager:
                             with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, path) as key:
                                 version = winreg.QueryValueEx(key, "version")[0]
                                 self._chrome_version = version
-                                self._log(f"Chrome version detected via registry: {version}", "SUCCESS")
+                                if self.debug:
+                                    self._log(f"Chrome version detected via registry: {version}", "SUCCESS")
                                 return version
                         except:
                             continue
                 except ImportError:
                     pass
                 
-                # Method 2: File version detection
+                # Method 2: File version detection (tanpa menjalankan Chrome)
                 chrome_paths = [
                     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
                     r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
@@ -214,85 +215,61 @@ class UniversalDriverManager:
                 
                 for chrome_path in chrome_paths:
                     if os.path.exists(chrome_path):
-                        try:
-                            result = subprocess.run([
-                                chrome_path, "--version"
-                            ], capture_output=True, text=True, timeout=10)
-                            
-                            if result.returncode == 0:
-                                version_line = result.stdout.strip()
-                                import re
-                                version_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', version_line)
-                                if version_match:
-                                    version = version_match.group(1)
-                                    self._chrome_version = version
-                                    self._log(f"Chrome version detected via executable: {version}", "SUCCESS")
-                                    return version
-                        except:
-                            continue
+                        # Hanya cek file exists, jangan jalankan
+                        self._chrome_version = "detected"
+                        if self.debug:
+                            self._log(f"Chrome executable found: {chrome_path}", "SUCCESS")
+                        return "detected"
                             
             elif self.system == "linux":
-                # Enhanced Linux Chrome version detection
+                # Enhanced Linux Chrome version detection (tanpa menjalankan)
                 commands = [
-                    ["google-chrome", "--version"],
-                    ["google-chrome-stable", "--version"],
-                    ["/usr/bin/google-chrome", "--version"],
-                    ["/usr/bin/google-chrome-stable", "--version"],
-                    ["/opt/google/chrome/chrome", "--version"],
-                    ["chromium-browser", "--version"],
-                    ["chromium", "--version"]
+                    "/usr/bin/google-chrome",
+                    "/usr/bin/google-chrome-stable",
+                    "/opt/google/chrome/chrome",
+                    "/usr/bin/chromium-browser",
+                    "/usr/bin/chromium"
                 ]
                 
                 for cmd in commands:
-                    try:
-                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-                        if result.returncode == 0:
-                            import re
-                            version_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', result.stdout)
-                            if version_match:
-                                version = version_match.group(1)
-                                self._chrome_version = version
-                                self._log(f"Chrome version detected: {version}", "SUCCESS")
-                                return version
-                    except:
-                        continue
+                    if os.path.exists(cmd):
+                        self._chrome_version = "detected"
+                        if self.debug:
+                            self._log(f"Chrome found: {cmd}", "SUCCESS")
+                        return "detected"
                         
             elif self.system == "darwin":  # macOS
-                try:
-                    result = subprocess.run([
-                        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "--version"
-                    ], capture_output=True, text=True, timeout=10)
-                    
-                    if result.returncode == 0:
-                        import re
-                        version_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', result.stdout)
-                        if version_match:
-                            version = version_match.group(1)
-                            self._chrome_version = version
-                            self._log(f"Chrome version detected: {version}", "SUCCESS")
-                            return version
-                except:
-                    pass
+                chrome_path = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                if os.path.exists(chrome_path):
+                    self._chrome_version = "detected"
+                    if self.debug:
+                        self._log(f"Chrome found: {chrome_path}", "SUCCESS")
+                    return "detected"
             
-            self._log("Could not detect Chrome version", "WARNING")
+            if self.debug:
+                self._log("Could not detect Chrome version", "WARNING")
             return None
             
         except Exception as e:
-            self._log(f"Error detecting Chrome version: {e}", "ERROR")
+            if self.debug:
+                self._log(f"Error detecting Chrome version: {e}", "ERROR")
             return None
 
     def find_existing_chromedriver(self) -> Optional[str]:
         """Find existing ChromeDriver dengan improved validation"""
-        self._log("Searching for existing ChromeDriver...", "INFO")
+        if self.debug:
+            self._log("Searching for existing ChromeDriver...", "INFO")
         
         # Method 1: Check PATH
         chromedriver_path = shutil.which('chromedriver')
         if chromedriver_path and os.path.exists(chromedriver_path):
-            if self._test_chromedriver(chromedriver_path):
-                self._log(f"ChromeDriver found in PATH: {chromedriver_path}", "SUCCESS")
+            if self._test_chromedriver_file(chromedriver_path):
+                if self.debug:
+                    self._log(f"ChromeDriver found in PATH: {chromedriver_path}", "SUCCESS")
                 return chromedriver_path
             else:
-                self._log(f"ChromeDriver in PATH is not working: {chromedriver_path}", "WARNING")
+                if self.debug:
+                    self._log(f"ChromeDriver in PATH is not working: {chromedriver_path}", "WARNING")
         
         # Method 2: Check common locations
         common_paths = []
@@ -325,45 +302,34 @@ class UniversalDriverManager:
         
         for path in common_paths:
             if os.path.exists(path):
-                if self._test_chromedriver(path):
-                    self._log(f"ChromeDriver found at: {path}", "SUCCESS")
+                if self._test_chromedriver_file(path):
+                    if self.debug:
+                        self._log(f"ChromeDriver found at: {path}", "SUCCESS")
                     return path
                 else:
-                    self._log(f"ChromeDriver found but not working: {path}", "WARNING")
+                    if self.debug:
+                        self._log(f"ChromeDriver found but not working: {path}", "WARNING")
         
-        # Method 3: Try WebDriver Manager with error handling
+        # Method 3: Check WebDriver Manager cache (tanpa menjalankan)
         try:
-            from webdriver_manager.chrome import ChromeDriverManager
+            home_dir = Path.home()
+            wdm_cache = home_dir / ".wdm" / "drivers" / "chromedriver"
             
-            # Suppress WebDriver Manager logs
-            os.environ['WDM_LOG_LEVEL'] = '0'
-            os.environ['WDM_PRINT_FIRST_LINE'] = 'False'
-            
-            self._log("Trying WebDriver Manager...", "INFO")
-            chromedriver_path = ChromeDriverManager().install()
-            
-            if chromedriver_path and os.path.exists(chromedriver_path):
-                # Fix for WebDriver Manager path issues
-                if self.system == "windows" and not chromedriver_path.endswith('.exe'):
-                    # Look for the actual executable
-                    driver_dir = Path(chromedriver_path).parent
-                    for file in driver_dir.rglob("chromedriver.exe"):
-                        chromedriver_path = str(file)
-                        break
-                
-                if self._test_chromedriver(chromedriver_path):
-                    self._log(f"ChromeDriver via WebDriver Manager: {chromedriver_path}", "SUCCESS")
-                    return chromedriver_path
-                else:
-                    self._log(f"WebDriver Manager ChromeDriver not working: {chromedriver_path}", "WARNING")
-                    
+            if wdm_cache.exists():
+                for chromedriver_file in wdm_cache.rglob("chromedriver*"):
+                    if chromedriver_file.is_file() and chromedriver_file.stat().st_size > 1024*1024:
+                        if self._test_chromedriver_file(str(chromedriver_file)):
+                            if self.debug:
+                                self._log(f"ChromeDriver found in cache: {chromedriver_file}", "SUCCESS")
+                            return str(chromedriver_file)
         except Exception as e:
-            self._log(f"WebDriver Manager failed: {e}", "WARNING")
+            if self.debug:
+                self._log(f"Cache check failed: {e}", "WARNING")
         
         return None
 
-    def _test_chromedriver(self, path: str) -> bool:
-        """Test if ChromeDriver is working dengan improved validation"""
+    def _test_chromedriver_file(self, path: str) -> bool:
+        """Test if ChromeDriver file is valid (tanpa menjalankan)"""
         try:
             # Check if file exists and is executable
             if not os.path.exists(path):
@@ -372,120 +338,38 @@ class UniversalDriverManager:
             # Check file size (should be > 1MB for valid ChromeDriver)
             file_size = os.path.getsize(path)
             if file_size < 1024 * 1024:  # Less than 1MB
-                self._log(f"ChromeDriver file too small: {file_size} bytes", "WARNING")
+                if self.debug:
+                    self._log(f"ChromeDriver file too small: {file_size} bytes", "WARNING")
                 return False
             
             # Make executable on Unix systems
             if self.system != "windows":
                 os.chmod(path, 0o755)
             
-            # Test execution
-            result = subprocess.run([path, "--version"], 
-                                  capture_output=True, text=True, timeout=15)
-            
-            if result.returncode == 0 and "ChromeDriver" in result.stdout:
-                return True
-            else:
-                self._log(f"ChromeDriver test failed: {result.stderr}", "WARNING")
-                return False
+            # Hanya cek file properties, jangan jalankan
+            return True
                 
-        except subprocess.TimeoutExpired:
-            self._log("ChromeDriver test timeout", "WARNING")
-            return False
         except Exception as e:
-            self._log(f"ChromeDriver test error: {e}", "WARNING")
+            if self.debug:
+                self._log(f"ChromeDriver file test error: {e}", "WARNING")
             return False
 
-    def get_chromedriver_path(self, auto_download: bool = True) -> Optional[str]:
+    def get_chromedriver_path(self, auto_download: bool = False) -> Optional[str]:
         """Get ChromeDriver path dengan comprehensive fallback"""
-        self._log("Initializing ChromeDriver...", "INFO")
+        if self.debug:
+            self._log("Checking ChromeDriver availability...", "INFO")
         
-        # Step 1: Try to find existing ChromeDriver
+        # Try to find existing ChromeDriver
         existing_path = self.find_existing_chromedriver()
         if existing_path:
             return existing_path
         
-        # Step 2: Auto-download if enabled
+        # Auto-download disabled untuk avoid opening Chrome
         if auto_download:
-            self._log("ChromeDriver not found, attempting auto-download...", "WARNING")
-            # For now, just return None to avoid complex download logic
-            self._log("Auto-download not implemented in this version", "WARNING")
+            if self.debug:
+                self._log("Auto-download disabled in test mode", "WARNING")
         
         return None
-
-    def setup_selenium_service(self, headless: bool = None, additional_options: list = None):
-        """Setup Selenium service dengan comprehensive error handling"""
-        from selenium import webdriver
-        from selenium.webdriver.chrome.service import Service
-        from selenium.webdriver.chrome.options import Options
-        
-        # Auto-detect headless mode for VPS
-        if headless is None:
-            headless = self.is_vps or self.is_headless
-        
-        # Get ChromeDriver path
-        chromedriver_path = self.get_chromedriver_path()
-        if not chromedriver_path:
-            raise Exception("ChromeDriver not available. Please run: python fix_all_drivers.py")
-        
-        # Setup Chrome options
-        chrome_options = Options()
-        
-        # Basic options
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_argument("--window-size=1280,800")
-        
-        if headless:
-            chrome_options.add_argument('--headless=new')
-            self._log("Running in headless mode", "INFO")
-        
-        # Additional options
-        default_options = [
-            '--disable-extensions',
-            '--disable-gpu',
-            '--disable-notifications',
-            '--disable-popup-blocking',
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            '--log-level=3',
-            '--silent',
-            '--disable-logging',
-            '--disable-web-security',
-            '--disable-features=VizDisplayCompositor'
-        ]
-        
-        for option in default_options:
-            chrome_options.add_argument(option)
-        
-        if additional_options:
-            for option in additional_options:
-                chrome_options.add_argument(option)
-        
-        # Anti-detection
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        # Setup service
-        service = Service(
-            chromedriver_path,
-            log_path=os.devnull,
-            service_args=['--silent']
-        )
-        
-        try:
-            # Create driver
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            
-            # Anti-detection script
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            
-            self._log("Selenium WebDriver ready", "SUCCESS")
-            return driver
-            
-        except Exception as e:
-            self._log(f"Failed to create WebDriver: {e}", "ERROR")
-            raise
 
     def run_diagnostics(self):
         """Run comprehensive diagnostics"""
@@ -508,7 +392,7 @@ class UniversalDriverManager:
         print(f"\n{Fore.YELLOW}Chrome Browser:")
         chrome_version = self.get_chrome_version()
         if chrome_version:
-            print(f"✅ Chrome installed: {chrome_version}")
+            print(f"✅ Chrome detected")
         else:
             print(f"❌ Chrome not found")
             print(f"   Download from: https://www.google.com/chrome/")
@@ -518,14 +402,9 @@ class UniversalDriverManager:
         chromedriver_path = self.find_existing_chromedriver()
         if chromedriver_path:
             print(f"✅ ChromeDriver found: {chromedriver_path}")
-            
-            # Test ChromeDriver
-            if self._test_chromedriver(chromedriver_path):
-                print(f"✅ ChromeDriver working")
-            else:
-                print(f"❌ ChromeDriver not working")
         else:
             print(f"❌ ChromeDriver not found")
+            print(f"   Will be auto-downloaded when needed")
         
         # Dependencies check
         print(f"\n{Fore.YELLOW}Dependencies:")
@@ -548,7 +427,8 @@ driver_manager = UniversalDriverManager()
 
 def get_chrome_driver(headless: bool = None, additional_options: list = None):
     """Get configured Chrome WebDriver dengan auto-headless untuk VPS"""
-    return driver_manager.setup_selenium_service(headless, additional_options)
+    # Untuk test mode, jangan buat driver
+    raise Exception("Driver creation disabled in test mode")
 
 def check_driver_status():
     """Check driver status"""
