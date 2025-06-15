@@ -2,6 +2,7 @@
 """
 Universal Driver Manager untuk Social Media Uploader
 Mengatasi masalah ChromeDriver di semua platform dengan deteksi otomatis
+Support untuk Windows, Linux/Ubuntu VPS, dan macOS
 Fixed untuk error [WinError 193] %1 is not a valid Win32 application
 """
 
@@ -36,6 +37,7 @@ class UniversalDriverManager:
         # Platform detection
         self.system = platform.system().lower()
         self.architecture = platform.machine().lower()
+        self.is_vps = self._detect_vps_environment()
         
         # Chrome version cache
         self._chrome_version = None
@@ -47,6 +49,94 @@ class UniversalDriverManager:
                 self.architecture = "x64"
             else:
                 self.architecture = "x86"
+        
+        # Ubuntu/Linux specific detection
+        elif self.system == "linux":
+            self.distro = self._detect_linux_distro()
+            self.is_ubuntu = "ubuntu" in self.distro.lower()
+            self.is_headless = self._detect_headless_environment()
+
+    def _detect_vps_environment(self) -> bool:
+        """Detect if running on VPS"""
+        try:
+            # Check for common VPS indicators
+            vps_indicators = [
+                "/proc/vz",  # OpenVZ
+                "/proc/xen",  # Xen
+                "/sys/hypervisor",  # General hypervisor
+            ]
+            
+            for indicator in vps_indicators:
+                if os.path.exists(indicator):
+                    return True
+            
+            # Check for cloud providers
+            try:
+                with open("/sys/class/dmi/id/product_name", "r") as f:
+                    product = f.read().strip().lower()
+                    if any(cloud in product for cloud in ["kvm", "qemu", "vmware", "virtualbox", "xen"]):
+                        return True
+            except:
+                pass
+            
+            # Check environment variables
+            if any(var in os.environ for var in ["AWS_REGION", "GOOGLE_CLOUD_PROJECT", "AZURE_SUBSCRIPTION_ID"]):
+                return True
+            
+            return False
+            
+        except Exception:
+            return False
+
+    def _detect_linux_distro(self) -> str:
+        """Detect Linux distribution"""
+        try:
+            # Try /etc/os-release first
+            if os.path.exists("/etc/os-release"):
+                with open("/etc/os-release", "r") as f:
+                    for line in f:
+                        if line.startswith("ID="):
+                            return line.split("=")[1].strip().strip('"')
+            
+            # Try lsb_release
+            try:
+                result = subprocess.run(["lsb_release", "-i"], capture_output=True, text=True)
+                if result.returncode == 0:
+                    return result.stdout.split(":")[1].strip()
+            except:
+                pass
+            
+            # Fallback checks
+            if os.path.exists("/etc/ubuntu-release"):
+                return "ubuntu"
+            elif os.path.exists("/etc/debian_version"):
+                return "debian"
+            elif os.path.exists("/etc/redhat-release"):
+                return "redhat"
+            elif os.path.exists("/etc/centos-release"):
+                return "centos"
+            
+            return "linux"
+            
+        except Exception:
+            return "linux"
+
+    def _detect_headless_environment(self) -> bool:
+        """Detect if running in headless environment (no GUI)"""
+        try:
+            # Check DISPLAY variable
+            if not os.environ.get("DISPLAY"):
+                return True
+            
+            # Check if X11 is available
+            try:
+                subprocess.run(["xset", "q"], capture_output=True, timeout=5)
+                return False  # X11 available
+            except:
+                return True  # No X11
+                
+        except Exception:
+            return True
 
     def _log(self, message: str, level: str = "INFO"):
         """Enhanced logging dengan warna"""
@@ -73,8 +163,132 @@ class UniversalDriverManager:
         icon = icons.get(level, "📝")
         print(f"{color}{icon} {message}{Style.RESET_ALL}")
 
+    def install_chrome_ubuntu(self) -> bool:
+        """Install Chrome on Ubuntu VPS"""
+        if not self.is_ubuntu:
+            self._log("Not Ubuntu, skipping Chrome installation", "WARNING")
+            return False
+        
+        self._log("Installing Chrome on Ubuntu...", "INFO")
+        
+        try:
+            # Update package list
+            self._log("Updating package list...", "INFO")
+            subprocess.run(["sudo", "apt", "update"], check=True, capture_output=True)
+            
+            # Install dependencies
+            self._log("Installing dependencies...", "INFO")
+            dependencies = [
+                "wget", "gnupg", "software-properties-common", 
+                "apt-transport-https", "ca-certificates"
+            ]
+            subprocess.run(["sudo", "apt", "install", "-y"] + dependencies, 
+                         check=True, capture_output=True)
+            
+            # Add Google Chrome repository
+            self._log("Adding Google Chrome repository...", "INFO")
+            
+            # Download and add Google signing key
+            subprocess.run([
+                "wget", "-q", "-O", "-", 
+                "https://dl.google.com/linux/linux_signing_key.pub"
+            ], stdout=subprocess.PIPE, check=True)
+            
+            key_result = subprocess.run([
+                "wget", "-q", "-O", "-", 
+                "https://dl.google.com/linux/linux_signing_key.pub"
+            ], capture_output=True, check=True)
+            
+            subprocess.run([
+                "sudo", "apt-key", "add", "-"
+            ], input=key_result.stdout, check=True)
+            
+            # Add repository
+            subprocess.run([
+                "sudo", "sh", "-c", 
+                'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list'
+            ], check=True)
+            
+            # Update package list again
+            subprocess.run(["sudo", "apt", "update"], check=True, capture_output=True)
+            
+            # Install Chrome
+            self._log("Installing Google Chrome...", "INFO")
+            subprocess.run([
+                "sudo", "apt", "install", "-y", "google-chrome-stable"
+            ], check=True, capture_output=True)
+            
+            self._log("Chrome installed successfully!", "SUCCESS")
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            self._log(f"Failed to install Chrome: {e}", "ERROR")
+            
+            # Try alternative installation
+            self._log("Trying alternative Chrome installation...", "WARNING")
+            try:
+                # Download Chrome deb package directly
+                subprocess.run([
+                    "wget", "-O", "/tmp/google-chrome-stable.deb",
+                    "https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb"
+                ], check=True, capture_output=True)
+                
+                # Install with dpkg
+                subprocess.run([
+                    "sudo", "dpkg", "-i", "/tmp/google-chrome-stable.deb"
+                ], capture_output=True)
+                
+                # Fix dependencies
+                subprocess.run([
+                    "sudo", "apt", "install", "-f", "-y"
+                ], check=True, capture_output=True)
+                
+                self._log("Chrome installed via alternative method!", "SUCCESS")
+                return True
+                
+            except Exception as e2:
+                self._log(f"Alternative installation also failed: {e2}", "ERROR")
+                return False
+        
+        except Exception as e:
+            self._log(f"Unexpected error installing Chrome: {e}", "ERROR")
+            return False
+
+    def install_chrome_dependencies_ubuntu(self) -> bool:
+        """Install Chrome dependencies for headless operation on Ubuntu"""
+        if not self.is_ubuntu:
+            return True
+        
+        self._log("Installing Chrome dependencies for Ubuntu VPS...", "INFO")
+        
+        try:
+            # Essential packages for headless Chrome
+            packages = [
+                "libnss3", "libgconf-2-4", "libxss1", "libappindicator1",
+                "libindicator7", "gconf-service", "libgconf-2-4",
+                "libxss1", "libappindicator1", "fonts-liberation",
+                "libappindicator3-1", "libasound2", "libatk-bridge2.0-0",
+                "libdrm2", "libxcomposite1", "libxdamage1", "libxrandr2",
+                "libgbm1", "libxkbcommon0", "libgtk-3-0", "libxshmfence1"
+            ]
+            
+            # Install packages
+            subprocess.run([
+                "sudo", "apt", "install", "-y"
+            ] + packages, check=True, capture_output=True)
+            
+            self._log("Chrome dependencies installed successfully!", "SUCCESS")
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            self._log(f"Failed to install Chrome dependencies: {e}", "ERROR")
+            return False
+        except Exception as e:
+            self._log(f"Unexpected error installing dependencies: {e}", "ERROR")
+            return False
+
     def get_chrome_version(self) -> Optional[str]:
-        """Get Chrome browser version dengan improved detection"""
+        """Get Chrome browser version dengan improved detection untuk Ubuntu"""
         if self._chrome_version:
             return self._chrome_version
         
@@ -111,14 +325,12 @@ class UniversalDriverManager:
                 for chrome_path in chrome_paths:
                     if os.path.exists(chrome_path):
                         try:
-                            # Try to get version from file properties
                             result = subprocess.run([
                                 chrome_path, "--version"
                             ], capture_output=True, text=True, timeout=10)
                             
                             if result.returncode == 0:
                                 version_line = result.stdout.strip()
-                                # Extract version number
                                 import re
                                 version_match = re.search(r'(\d+\.\d+\.\d+\.\d+)', version_line)
                                 if version_match:
@@ -130,10 +342,13 @@ class UniversalDriverManager:
                             continue
                             
             elif self.system == "linux":
-                # Linux Chrome version detection
+                # Enhanced Linux Chrome version detection
                 commands = [
                     ["google-chrome", "--version"],
                     ["google-chrome-stable", "--version"],
+                    ["/usr/bin/google-chrome", "--version"],
+                    ["/usr/bin/google-chrome-stable", "--version"],
+                    ["/opt/google/chrome/chrome", "--version"],
                     ["chromium-browser", "--version"],
                     ["chromium", "--version"]
                 ]
@@ -177,7 +392,7 @@ class UniversalDriverManager:
             return None
 
     def find_existing_chromedriver(self) -> Optional[str]:
-        """Find existing ChromeDriver dengan improved validation"""
+        """Find existing ChromeDriver dengan improved validation untuk Ubuntu"""
         self._log("Searching for existing ChromeDriver...", "INFO")
         
         # Method 1: Check PATH
@@ -206,6 +421,7 @@ class UniversalDriverManager:
                 "/usr/local/bin/chromedriver",
                 "/usr/bin/chromedriver",
                 "/opt/chromedriver/chromedriver",
+                "/snap/bin/chromium.chromedriver",  # Snap package
                 str(self.base_dir / "chromedriver"),
                 str(self.drivers_dir / "chromedriver")
             ]
@@ -269,6 +485,10 @@ class UniversalDriverManager:
                 self._log(f"ChromeDriver file too small: {file_size} bytes", "WARNING")
                 return False
             
+            # Make executable on Unix systems
+            if self.system != "windows":
+                os.chmod(path, 0o755)
+            
             # Test execution
             result = subprocess.run([path, "--version"], 
                                   capture_output=True, text=True, timeout=15)
@@ -287,7 +507,7 @@ class UniversalDriverManager:
             return False
 
     def download_chromedriver(self, version: str = None) -> Optional[str]:
-        """Download ChromeDriver dengan improved error handling"""
+        """Download ChromeDriver dengan improved error handling untuk Ubuntu"""
         if not version:
             version = self.get_chrome_version()
             if not version:
@@ -368,7 +588,7 @@ class UniversalDriverManager:
         return None
 
     def _get_download_url(self, chromedriver_version: str) -> Optional[str]:
-        """Get download URL dengan improved platform detection"""
+        """Get download URL dengan improved platform detection untuk Ubuntu"""
         try:
             # Determine platform suffix
             if self.system == "windows":
@@ -377,7 +597,7 @@ class UniversalDriverManager:
                 else:
                     platform_suffix = "win32"
             elif self.system == "linux":
-                if "64" in self.architecture:
+                if "64" in self.architecture or "x86_64" in self.architecture:
                     platform_suffix = "linux64"
                 else:
                     platform_suffix = "linux32"
@@ -423,7 +643,7 @@ class UniversalDriverManager:
             return None
 
     def _download_and_extract(self, url: str, version: str) -> Optional[str]:
-        """Download and extract ChromeDriver dengan improved error handling"""
+        """Download and extract ChromeDriver dengan improved error handling untuk Ubuntu"""
         try:
             # Download
             self._log("Downloading ChromeDriver...", "INFO")
@@ -499,7 +719,7 @@ class UniversalDriverManager:
             return None
 
     def get_chromedriver_path(self, auto_download: bool = True) -> Optional[str]:
-        """Get ChromeDriver path dengan comprehensive fallback"""
+        """Get ChromeDriver path dengan comprehensive fallback untuk Ubuntu"""
         self._log("Initializing ChromeDriver...", "INFO")
         
         # Step 1: Try to find existing ChromeDriver
@@ -519,21 +739,41 @@ class UniversalDriverManager:
         return None
 
     def _show_troubleshooting_tips(self):
-        """Show comprehensive troubleshooting tips"""
+        """Show comprehensive troubleshooting tips untuk Ubuntu"""
         self._log("ChromeDriver setup failed. Troubleshooting tips:", "ERROR")
-        self._log("1. Install Google Chrome browser", "INFO")
-        self._log("2. Download ChromeDriver from https://chromedriver.chromium.org/", "INFO")
-        self._log("3. Place chromedriver.exe in your PATH or project folder", "INFO")
-        self._log("4. Install webdriver-manager: pip install webdriver-manager", "INFO")
-        self._log("5. Check Chrome and ChromeDriver version compatibility", "INFO")
-        self._log("6. Run: python driver_manager.py --diagnostics", "INFO")
-        self._log("7. Try: python fix_all_drivers.py", "INFO")
+        
+        if self.system == "linux":
+            if self.is_ubuntu:
+                self._log("Ubuntu VPS specific tips:", "INFO")
+                self._log("1. Install Chrome: python driver_manager.py --install-chrome", "INFO")
+                self._log("2. Install dependencies: sudo apt install -y libnss3 libgconf-2-4", "INFO")
+                self._log("3. Check if running headless: echo $DISPLAY", "INFO")
+            else:
+                self._log("Linux specific tips:", "INFO")
+                self._log("1. Install Chrome browser for your distribution", "INFO")
+                self._log("2. Install required dependencies", "INFO")
+            
+            self._log("4. Download ChromeDriver manually: https://chromedriver.chromium.org/", "INFO")
+            self._log("5. Place in /usr/local/bin/ and make executable: chmod +x chromedriver", "INFO")
+        else:
+            self._log("1. Install Google Chrome browser", "INFO")
+            self._log("2. Download ChromeDriver from https://chromedriver.chromium.org/", "INFO")
+            self._log("3. Place chromedriver.exe in your PATH or project folder", "INFO")
+        
+        self._log("6. Install webdriver-manager: pip install webdriver-manager", "INFO")
+        self._log("7. Check Chrome and ChromeDriver version compatibility", "INFO")
+        self._log("8. Run: python driver_manager.py --diagnostics", "INFO")
+        self._log("9. Try: python fix_all_drivers.py", "INFO")
 
-    def setup_selenium_service(self, headless: bool = False, additional_options: list = None):
-        """Setup Selenium service dengan comprehensive error handling"""
+    def setup_selenium_service(self, headless: bool = None, additional_options: list = None):
+        """Setup Selenium service dengan comprehensive error handling untuk Ubuntu"""
         from selenium import webdriver
         from selenium.webdriver.chrome.service import Service
         from selenium.webdriver.chrome.options import Options
+        
+        # Auto-detect headless mode for VPS
+        if headless is None:
+            headless = self.is_vps or self.is_headless
         
         # Get ChromeDriver path
         chromedriver_path = self.get_chromedriver_path()
@@ -551,6 +791,25 @@ class UniversalDriverManager:
         
         if headless:
             chrome_options.add_argument('--headless=new')
+            self._log("Running in headless mode (VPS detected)", "INFO")
+        
+        # Ubuntu VPS specific options
+        if self.is_ubuntu and (self.is_vps or self.is_headless):
+            ubuntu_options = [
+                '--disable-gpu',
+                '--disable-software-rasterizer',
+                '--disable-background-timer-throttling',
+                '--disable-backgrounding-occluded-windows',
+                '--disable-renderer-backgrounding',
+                '--disable-features=TranslateUI',
+                '--disable-ipc-flooding-protection',
+                '--single-process',  # Important for VPS
+                '--no-zygote',       # Important for VPS
+                '--disable-setuid-sandbox'
+            ]
+            
+            for option in ubuntu_options:
+                chrome_options.add_argument(option)
         
         # Additional options
         default_options = [
@@ -558,7 +817,7 @@ class UniversalDriverManager:
             '--disable-gpu',
             '--disable-notifications',
             '--disable-popup-blocking',
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            '--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             '--log-level=3',
             '--silent',
             '--disable-logging',
@@ -599,7 +858,7 @@ class UniversalDriverManager:
             raise
 
     def run_diagnostics(self):
-        """Run comprehensive diagnostics"""
+        """Run comprehensive diagnostics untuk Ubuntu VPS"""
         print(f"\n{Fore.LIGHTBLUE_EX}🔍 DRIVER DIAGNOSTICS")
         print("=" * 50)
         
@@ -608,6 +867,13 @@ class UniversalDriverManager:
         print(f"OS: {self.system}")
         print(f"Architecture: {self.architecture}")
         
+        if self.system == "linux":
+            print(f"Distribution: {self.distro}")
+            print(f"Is Ubuntu: {self.is_ubuntu}")
+            print(f"Is VPS: {self.is_vps}")
+            print(f"Is Headless: {self.is_headless}")
+            print(f"DISPLAY: {os.environ.get('DISPLAY', 'Not set')}")
+        
         # Chrome check
         print(f"\n{Fore.YELLOW}Chrome Browser:")
         chrome_version = self.get_chrome_version()
@@ -615,7 +881,10 @@ class UniversalDriverManager:
             print(f"✅ Chrome installed: {chrome_version}")
         else:
             print(f"❌ Chrome not found")
-            print(f"   Download from: https://www.google.com/chrome/")
+            if self.is_ubuntu:
+                print(f"   Install with: python driver_manager.py --install-chrome")
+            else:
+                print(f"   Download from: https://www.google.com/chrome/")
         
         # ChromeDriver check
         print(f"\n{Fore.YELLOW}ChromeDriver:")
@@ -660,30 +929,68 @@ class UniversalDriverManager:
         except ImportError:
             print(f"❌ Requests not installed")
         
+        # Ubuntu specific checks
+        if self.is_ubuntu:
+            print(f"\n{Fore.YELLOW}Ubuntu VPS Checks:")
+            
+            # Check Chrome dependencies
+            required_packages = ["libnss3", "libgconf-2-4", "libxss1"]
+            for package in required_packages:
+                try:
+                    result = subprocess.run(["dpkg", "-l", package], 
+                                          capture_output=True, text=True)
+                    if result.returncode == 0:
+                        print(f"✅ {package}: installed")
+                    else:
+                        print(f"❌ {package}: not installed")
+                except:
+                    print(f"❓ {package}: unknown")
+        
         # Test driver creation
         print(f"\n{Fore.YELLOW}Driver Test:")
         try:
             driver = self.setup_selenium_service(headless=True)
             print(f"✅ Driver creation successful")
+            
+            # Test navigation
+            driver.get("https://www.google.com")
+            print(f"✅ Navigation test successful")
+            
             driver.quit()
         except Exception as e:
             print(f"❌ Driver creation failed: {e}")
+
+    def install_chrome_command(self):
+        """Install Chrome via command line"""
+        if self.is_ubuntu:
+            success = self.install_chrome_ubuntu()
+            if success:
+                # Also install dependencies
+                self.install_chrome_dependencies_ubuntu()
+            return success
+        else:
+            self._log("Chrome auto-installation only supported on Ubuntu", "ERROR")
+            return False
 
 
 # Global instance
 driver_manager = UniversalDriverManager()
 
-def get_chrome_driver(headless: bool = False, additional_options: list = None):
-    """Get configured Chrome WebDriver"""
+def get_chrome_driver(headless: bool = None, additional_options: list = None):
+    """Get configured Chrome WebDriver dengan auto-headless untuk VPS"""
     return driver_manager.setup_selenium_service(headless, additional_options)
 
 def check_driver_status():
     """Check driver status"""
-    return driver_manager.check_system_requirements()
+    return driver_manager.get_chromedriver_path() is not None
 
 def run_driver_diagnostics():
     """Run driver diagnostics"""
     driver_manager.run_diagnostics()
+
+def install_chrome_ubuntu():
+    """Install Chrome on Ubuntu"""
+    return driver_manager.install_chrome_command()
 
 if __name__ == "__main__":
     import argparse
@@ -691,13 +998,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Universal Driver Manager")
     parser.add_argument("--diagnostics", action="store_true", help="Run diagnostics")
     parser.add_argument("--test", action="store_true", help="Test driver setup")
+    parser.add_argument("--install-chrome", action="store_true", help="Install Chrome on Ubuntu")
     parser.add_argument("--debug", action="store_true", help="Enable debug logging")
     
     args = parser.parse_args()
     
     manager = UniversalDriverManager(debug=args.debug)
     
-    if args.diagnostics:
+    if args.install_chrome:
+        if manager.install_chrome_command():
+            print(f"{Fore.GREEN}✅ Chrome installation completed!")
+        else:
+            print(f"{Fore.RED}❌ Chrome installation failed!")
+    elif args.diagnostics:
         manager.run_diagnostics()
     elif args.test:
         try:
