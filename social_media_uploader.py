@@ -103,6 +103,34 @@ class SocialMediaUploader:
         icon = icons.get(level, "📝")
         print(f"{color}{icon} {message}{Style.RESET_ALL}")
 
+    def get_content_source(self) -> Dict[str, Any]:
+        """
+        Interactive menu untuk memilih sumber konten (video, image, atau text)
+        
+        Returns:
+            Dict dengan informasi sumber konten
+        """
+        print(f"\n{Fore.LIGHTBLUE_EX}📹 PILIH JENIS KONTEN:")
+        print("=" * 50)
+        print(f"{Fore.YELLOW}1. 🎬 Video Content (TikTok, Facebook Reels, YouTube Shorts, Instagram Reels)")
+        print(f"{Fore.YELLOW}2. 📝 Text Status (Facebook Status)")
+        print(f"{Fore.YELLOW}3. 🖼️ Image/Media (Facebook Post, Instagram Post)")
+        print(f"{Fore.YELLOW}4. ❌ Kembali")
+        
+        choice = input(f"\n{Fore.WHITE}Pilihan (1-4): ").strip()
+        
+        if choice == "1":
+            return self.get_video_source()
+        elif choice == "2":
+            return self._get_text_status()
+        elif choice == "3":
+            return self._get_image_media()
+        elif choice == "4":
+            return {"source": "cancel"}
+        else:
+            self._log("Pilihan tidak valid!", "ERROR")
+            return self.get_content_source()
+
     def get_video_source(self) -> Dict[str, Any]:
         """
         Interactive menu untuk memilih sumber video
@@ -131,6 +159,76 @@ class SocialMediaUploader:
             self._log("Pilihan tidak valid!", "ERROR")
             return self.get_video_source()
 
+    def _get_text_status(self) -> Dict[str, Any]:
+        """Get text status untuk Facebook"""
+        print(f"\n{Fore.CYAN}📝 FACEBOOK TEXT STATUS:")
+        print("=" * 40)
+        
+        status_text = input(f"{Fore.WHITE}Masukkan status text: ").strip()
+        
+        if not status_text:
+            self._log("Status text tidak boleh kosong!", "ERROR")
+            return {"source": "error", "message": "Status text kosong"}
+        
+        self._log(f"Text status siap: {status_text[:50]}{'...' if len(status_text) > 50 else ''}", "SUCCESS")
+        
+        return {
+            "source": "text_status",
+            "content_type": "text",
+            "status_text": status_text,
+            "filename": "text_status",
+            "original_source": "text_input"
+        }
+
+    def _get_image_media(self) -> Dict[str, Any]:
+        """Get image/media file"""
+        print(f"\n{Fore.CYAN}🖼️ PILIH IMAGE/MEDIA FILE:")
+        print("=" * 40)
+        
+        media_path = input(f"{Fore.WHITE}Path ke file image/media: ").strip()
+        
+        if not media_path:
+            self._log("Path tidak boleh kosong!", "ERROR")
+            return {"source": "error", "message": "Path kosong"}
+        
+        if not os.path.exists(media_path):
+            self._log("File tidak ditemukan!", "ERROR")
+            return {"source": "error", "message": "File tidak ditemukan"}
+        
+        # Validasi file media
+        media_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.mp4', '.avi', '.mov', '.mkv', '.webm']
+        if not any(media_path.lower().endswith(ext) for ext in media_extensions):
+            self._log("File bukan media yang valid!", "ERROR")
+            return {"source": "error", "message": "Bukan file media"}
+        
+        file_size = os.path.getsize(media_path) / (1024 * 1024)  # MB
+        
+        # Detect content type
+        image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+        video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.webm']
+        
+        if any(media_path.lower().endswith(ext) for ext in image_extensions):
+            content_type = "image"
+        elif any(media_path.lower().endswith(ext) for ext in video_extensions):
+            content_type = "video"
+        else:
+            content_type = "media"
+        
+        # Optional caption
+        caption = input(f"{Fore.CYAN}Caption untuk media (optional): ").strip()
+        
+        self._log(f"Media file dipilih: {os.path.basename(media_path)} ({file_size:.2f}MB)", "SUCCESS")
+        
+        return {
+            "source": "media_file",
+            "content_type": content_type,
+            "media_path": media_path,
+            "filename": os.path.basename(media_path),
+            "file_size_mb": round(file_size, 2),
+            "caption": caption,
+            "original_source": "local_media"
+        }
+
     def _get_local_video(self) -> Dict[str, Any]:
         """Get video dari file lokal"""
         print(f"\n{Fore.CYAN}📁 PILIH FILE VIDEO LOKAL:")
@@ -156,6 +254,7 @@ class SocialMediaUploader:
         
         return {
             "source": "local",
+            "content_type": "video",
             "video_path": video_path,
             "filename": os.path.basename(video_path),
             "file_size_mb": round(file_size, 2),
@@ -207,6 +306,7 @@ class SocialMediaUploader:
             self._log(f"Download berhasil: {result['filename']}", "SUCCESS")
             return {
                 "source": "download",
+                "content_type": "video",
                 "video_path": result["file_path"],
                 "filename": result["filename"],
                 "file_size_mb": result["file_size_mb"],
@@ -285,6 +385,7 @@ class SocialMediaUploader:
             first_success = result["successful"][0]
             return {
                 "source": "batch_download",
+                "content_type": "video",
                 "video_path": first_success["file_path"],
                 "filename": os.path.basename(first_success["file_path"]),
                 "file_size_mb": first_success["file_size_mb"],
@@ -303,40 +404,46 @@ class SocialMediaUploader:
         print(f"\n{Fore.LIGHTMAGENTA_EX}🚀 SMART UPLOAD PIPELINE")
         print("=" * 60)
         
-        # Step 1: Get video source
-        video_source = self.get_video_source()
+        # Step 1: Get content source (video, text, atau media)
+        content_source = self.get_content_source()
         
-        if video_source.get("source") == "cancel":
+        if content_source.get("source") == "cancel":
             return {"success": False, "message": "Dibatalkan oleh user"}
         
-        if video_source.get("source") == "error":
-            return {"success": False, "message": video_source.get("message", "Unknown error")}
+        if content_source.get("source") == "error":
+            return {"success": False, "message": content_source.get("message", "Unknown error")}
         
-        # Get video path
-        video_path = video_source.get("video_path")
-        if not video_path or not os.path.exists(video_path):
-            return {"success": False, "message": "Video path tidak valid"}
+        content_type = content_source.get("content_type", "video")
         
-        self._log(f"Video source: {video_source.get('original_source', 'unknown')}", "INFO")
-        self._log(f"Processing: {video_source.get('filename', 'unknown')}", "INFO")
+        self._log(f"Content type: {content_type}", "INFO")
+        self._log(f"Content source: {content_source.get('original_source', 'unknown')}", "INFO")
         
-        # Step 2: Platform selection
-        platforms = self._select_platforms()
+        # Step 2: Platform selection berdasarkan content type
+        platforms = self._select_platforms_by_content_type(content_type)
         if not platforms:
             return {"success": False, "message": "Tidak ada platform dipilih"}
         
-        # Step 3: AI Content Generation Options
+        # Step 3: AI Content Generation Options (untuk semua jenis konten)
         ai_content = {}
         use_ai = False
         if self.ai_assistant and AI_AVAILABLE:
             print(f"\n{Fore.LIGHTMAGENTA_EX}🤖 OPSI AI CONTENT GENERATION:")
             print("=" * 50)
             print(f"{Fore.YELLOW}Gunakan AI untuk:")
-            print("• Generate judul yang menarik dan viral")
-            print("• Buat deskripsi yang engaging")
-            print("• Suggest hashtag trending")
-            print("• Optimasi konten per platform")
-            print("• Analisis potensi viral")
+            if content_type == "text":
+                print("• Enhance text status yang lebih engaging")
+                print("• Generate hashtag trending")
+                print("• Optimasi konten untuk Facebook")
+            elif content_type == "image":
+                print("• Generate caption yang menarik")
+                print("• Suggest hashtag trending")
+                print("• Optimasi konten per platform")
+            else:  # video
+                print("• Generate judul yang menarik dan viral")
+                print("• Buat deskripsi yang engaging")
+                print("• Suggest hashtag trending")
+                print("• Optimasi konten per platform")
+                print("• Analisis potensi viral")
             
             use_ai_choice = input(f"\n{Fore.WHITE}Gunakan AI Content Generation? (Y/n): ").strip().lower()
             if use_ai_choice != 'n':
@@ -358,13 +465,13 @@ class SocialMediaUploader:
                 }
                 ai_strategy = ai_strategy_map.get(ai_strategy_choice, "balanced")
                 
-                self._log("Memulai AI analysis dan content generation...", "PIPELINE")
-                ai_content = self._ai_analysis_and_content_generation(video_path, ai_strategy, platforms)
+                self._log("Memulai AI content generation...", "PIPELINE")
+                ai_content = self._ai_content_generation_by_type(content_source, ai_strategy, platforms)
         
-        # Step 4: Video Enhancement Options
-        processed_video_path = video_path
+        # Step 4: Video Enhancement Options (hanya untuk video)
+        processed_content_path = content_source.get("video_path") or content_source.get("media_path")
         use_ffmpeg = False
-        if self.video_editor and FFMPEG_AVAILABLE:
+        if content_type == "video" and self.video_editor and FFMPEG_AVAILABLE:
             print(f"\n{Fore.LIGHTBLUE_EX}🎬 OPSI VIDEO ENHANCEMENT:")
             print("=" * 50)
             print(f"{Fore.YELLOW}Gunakan FFmpeg untuk:")
@@ -398,18 +505,23 @@ class SocialMediaUploader:
                 intensity = intensity_map.get(intensity_choice, "medium")
                 
                 self._log("Memulai video enhancement...", "PIPELINE")
-                processed_video_path = self._enhance_video_with_options(
-                    video_path, enhancement_choice, intensity, platforms, ai_content
+                processed_content_path = self._enhance_video_with_options(
+                    content_source.get("video_path"), enhancement_choice, intensity, platforms, ai_content
                 )
         
         # Step 5: Final confirmation
         print(f"\n{Fore.LIGHTGREEN_EX}📋 RINGKASAN UPLOAD:")
         print("=" * 50)
-        print(f"Video: {video_source.get('filename', 'unknown')}")
-        print(f"Size: {video_source.get('file_size_mb', 0):.2f} MB")
+        print(f"Content Type: {content_type.upper()}")
+        if content_type == "text":
+            print(f"Status: {content_source.get('status_text', '')[:50]}{'...' if len(content_source.get('status_text', '')) > 50 else ''}")
+        else:
+            print(f"Filename: {content_source.get('filename', 'unknown')}")
+            print(f"Size: {content_source.get('file_size_mb', 0):.2f} MB")
         print(f"Platforms: {', '.join([p.upper() for p in platforms])}")
         print(f"AI Content: {'✅ Enabled' if use_ai else '❌ Disabled'}")
-        print(f"Video Enhancement: {'✅ Enabled' if use_ffmpeg else '❌ Disabled'}")
+        if content_type == "video":
+            print(f"Video Enhancement: {'✅ Enabled' if use_ffmpeg else '❌ Disabled'}")
         
         confirm = input(f"\n{Fore.WHITE}Lanjutkan upload? (Y/n): ").strip().lower()
         if confirm == 'n':
@@ -423,11 +535,11 @@ class SocialMediaUploader:
             # Get platform-specific content
             platform_content = ai_content.get(platform, {}) if ai_content else {}
             
-            result = self._upload_to_platform(
+            result = self._upload_to_platform_by_type(
                 platform=platform,
-                video_path=processed_video_path,
-                content=platform_content,
-                video_source=video_source
+                content_source=content_source,
+                content_path=processed_content_path,
+                content=platform_content
             )
             
             upload_results[platform] = result
@@ -445,7 +557,8 @@ class SocialMediaUploader:
         
         return {
             "success": len(successful_uploads) > 0,
-            "video_source": video_source,
+            "content_source": content_source,
+            "content_type": content_type,
             "platforms": platforms,
             "successful_uploads": successful_uploads,
             "failed_uploads": failed_uploads,
@@ -455,108 +568,181 @@ class SocialMediaUploader:
             "used_ffmpeg": use_ffmpeg
         }
 
-    def _select_platforms(self) -> List[str]:
-        """Select platforms untuk upload"""
+    def _select_platforms_by_content_type(self, content_type: str) -> List[str]:
+        """Select platforms berdasarkan content type"""
         print(f"\n{Fore.YELLOW}📱 PILIH PLATFORM UPLOAD:")
-        print("1. TikTok")
-        print("2. Facebook (Reels)")
-        print("3. YouTube (Shorts)")
-        print("4. Instagram (Reels/Posts)")
-        print("5. Semua Platform")
         
-        choice = input(f"{Fore.WHITE}Pilihan (1-5, atau pisahkan dengan koma): ").strip()
+        if content_type == "text":
+            print("1. Facebook (Text Status)")
+            print("2. Kembali")
+            
+            choice = input(f"{Fore.WHITE}Pilihan (1-2): ").strip()
+            if choice == "1":
+                return ["facebook"]
+            else:
+                return []
         
-        if choice == "5":
-            return ["tiktok", "facebook", "youtube", "instagram"]
-        elif "," in choice:
-            platform_map = {"1": "tiktok", "2": "facebook", "3": "youtube", "4": "instagram"}
-            selected = []
-            for c in choice.split(","):
-                platform = platform_map.get(c.strip())
-                if platform:
-                    selected.append(platform)
-            return selected
-        else:
-            platform_map = {"1": "tiktok", "2": "facebook", "3": "youtube", "4": "instagram"}
-            platform = platform_map.get(choice)
-            return [platform] if platform else []
+        elif content_type == "image":
+            print("1. Facebook (Image Post)")
+            print("2. Instagram (Image Post)")
+            print("3. Facebook + Instagram")
+            print("4. Kembali")
+            
+            choice = input(f"{Fore.WHITE}Pilihan (1-4): ").strip()
+            if choice == "1":
+                return ["facebook"]
+            elif choice == "2":
+                return ["instagram"]
+            elif choice == "3":
+                return ["facebook", "instagram"]
+            else:
+                return []
+        
+        else:  # video
+            print("1. TikTok")
+            print("2. Facebook (Reels)")
+            print("3. YouTube (Shorts)")
+            print("4. Instagram (Reels)")
+            print("5. Semua Platform")
+            
+            choice = input(f"{Fore.WHITE}Pilihan (1-5, atau pisahkan dengan koma): ").strip()
+            
+            if choice == "5":
+                return ["tiktok", "facebook", "youtube", "instagram"]
+            elif "," in choice:
+                platform_map = {"1": "tiktok", "2": "facebook", "3": "youtube", "4": "instagram"}
+                selected = []
+                for c in choice.split(","):
+                    platform = platform_map.get(c.strip())
+                    if platform:
+                        selected.append(platform)
+                return selected
+            else:
+                platform_map = {"1": "tiktok", "2": "facebook", "3": "youtube", "4": "instagram"}
+                platform = platform_map.get(choice)
+                return [platform] if platform else []
 
-    def _ai_analysis_and_content_generation(self, video_path: str, strategy: str, platforms: List[str]) -> Dict[str, Any]:
-        """AI analysis dan content generation"""
+    def _ai_content_generation_by_type(self, content_source: Dict[str, Any], strategy: str, platforms: List[str]) -> Dict[str, Any]:
+        """AI content generation berdasarkan content type"""
         try:
+            content_type = content_source.get("content_type", "video")
+            
             if not self.ai_assistant:
                 self._log("AI Assistant tidak tersedia", "WARNING")
-                return self._generate_fallback_content(platforms)
+                return self._generate_fallback_content_by_type(content_type, platforms)
             
-            # Simulate AI analysis - replace with actual AI call
-            self._log("Menganalisis video dengan AI...", "INFO")
+            self._log(f"Menganalisis {content_type} dengan AI...", "INFO")
             time.sleep(2)  # Simulate processing time
             
             # Generate content for each platform
             ai_content = {}
             
             for platform in platforms:
-                if platform == "tiktok":
+                if content_type == "text" and platform == "facebook":
+                    original_text = content_source.get("status_text", "")
                     ai_content[platform] = {
-                        "title": "Video Viral yang Menakjubkan! 🔥",
-                        "description": "#fyp #viral #trending #amazing #wow #foryou #tiktok #video #content #entertainment",
-                        "hashtags": ["#fyp", "#viral", "#trending", "#amazing", "#wow", "#foryou"]
+                        "title": "Enhanced Status",
+                        "description": f"{original_text} #facebook #status #viral #trending #amazing",
+                        "hashtags": ["#facebook", "#status", "#viral", "#trending"]
                     }
-                elif platform == "facebook":
-                    ai_content[platform] = {
-                        "title": "Video Menakjubkan yang Wajib Ditonton!",
-                        "description": "Video ini benar-benar luar biasa! Jangan lupa like dan share ke teman-teman kalian. #viral #amazing #video #facebook #reels",
-                        "hashtags": ["#viral", "#amazing", "#video", "#facebook", "#reels"]
-                    }
-                elif platform == "youtube":
-                    ai_content[platform] = {
-                        "title": "Video Viral yang Akan Mengejutkan Anda!",
-                        "description": "Tonton video menakjubkan ini sampai habis! Jangan lupa subscribe, like, dan share. #Shorts #viral #amazing #youtube #trending",
-                        "hashtags": ["#Shorts", "#viral", "#amazing", "#youtube", "#trending"]
-                    }
-                elif platform == "instagram":
-                    ai_content[platform] = {
-                        "title": "Content yang Luar Biasa! ✨",
-                        "description": "Video yang wajib kalian tonton! Tag teman kalian di komentar. #viral #instagram #reels #amazing #content #trending",
-                        "hashtags": ["#viral", "#instagram", "#reels", "#amazing", "#content"]
-                    }
+                
+                elif content_type == "image":
+                    caption = content_source.get("caption", "")
+                    if platform == "facebook":
+                        ai_content[platform] = {
+                            "title": "Amazing Image Post!",
+                            "description": f"{caption} Check out this amazing image! #viral #amazing #image #facebook #post",
+                            "hashtags": ["#viral", "#amazing", "#image", "#facebook"]
+                        }
+                    elif platform == "instagram":
+                        ai_content[platform] = {
+                            "title": "Beautiful Content! ✨",
+                            "description": f"{caption} Love this shot! Tag your friends! #viral #instagram #photo #amazing #beautiful",
+                            "hashtags": ["#viral", "#instagram", "#photo", "#amazing"]
+                        }
+                
+                else:  # video
+                    if platform == "tiktok":
+                        ai_content[platform] = {
+                            "title": "Video Viral yang Menakjubkan! 🔥",
+                            "description": "#fyp #viral #trending #amazing #wow #foryou #tiktok #video #content #entertainment",
+                            "hashtags": ["#fyp", "#viral", "#trending", "#amazing", "#wow", "#foryou"]
+                        }
+                    elif platform == "facebook":
+                        ai_content[platform] = {
+                            "title": "Video Menakjubkan yang Wajib Ditonton!",
+                            "description": "Video ini benar-benar luar biasa! Jangan lupa like dan share ke teman-teman kalian. #viral #amazing #video #facebook #reels",
+                            "hashtags": ["#viral", "#amazing", "#video", "#facebook", "#reels"]
+                        }
+                    elif platform == "youtube":
+                        ai_content[platform] = {
+                            "title": "Video Viral yang Akan Mengejutkan Anda!",
+                            "description": "Tonton video menakjubkan ini sampai habis! Jangan lupa subscribe, like, dan share. #Shorts #viral #amazing #youtube #trending",
+                            "hashtags": ["#Shorts", "#viral", "#amazing", "#youtube", "#trending"]
+                        }
+                    elif platform == "instagram":
+                        ai_content[platform] = {
+                            "title": "Content yang Luar Biasa! ✨",
+                            "description": "Video yang wajib kalian tonton! Tag teman kalian di komentar. #viral #instagram #reels #amazing #content #trending",
+                            "hashtags": ["#viral", "#instagram", "#reels", "#amazing", "#content"]
+                        }
             
             self._log("AI content generation selesai", "SUCCESS")
             return ai_content
             
         except Exception as e:
-            self._log(f"AI analysis error: {e}", "WARNING")
-            return self._generate_fallback_content(platforms)
+            self._log(f"AI content generation error: {e}", "WARNING")
+            return self._generate_fallback_content_by_type(content_type, platforms)
 
-    def _generate_fallback_content(self, platforms: List[str]) -> Dict[str, Any]:
-        """Generate fallback content jika AI tidak tersedia"""
+    def _generate_fallback_content_by_type(self, content_type: str, platforms: List[str]) -> Dict[str, Any]:
+        """Generate fallback content berdasarkan content type"""
         fallback_content = {}
         
         for platform in platforms:
-            if platform == "tiktok":
+            if content_type == "text" and platform == "facebook":
                 fallback_content[platform] = {
-                    "title": "Video Menarik",
-                    "description": "#fyp #viral #trending",
-                    "hashtags": ["#fyp", "#viral", "#trending"]
+                    "title": "Status Update",
+                    "description": "#facebook #status #update",
+                    "hashtags": ["#facebook", "#status"]
                 }
-            elif platform == "facebook":
-                fallback_content[platform] = {
-                    "title": "Video Menarik",
-                    "description": "Check out this amazing video! #viral #video",
-                    "hashtags": ["#viral", "#video"]
-                }
-            elif platform == "youtube":
-                fallback_content[platform] = {
-                    "title": "Amazing Video",
-                    "description": "Watch this amazing video! #Shorts #viral",
-                    "hashtags": ["#Shorts", "#viral"]
-                }
-            elif platform == "instagram":
-                fallback_content[platform] = {
-                    "title": "Amazing Content",
-                    "description": "Check out this content! #viral #instagram",
-                    "hashtags": ["#viral", "#instagram"]
-                }
+            elif content_type == "image":
+                if platform == "facebook":
+                    fallback_content[platform] = {
+                        "title": "Amazing Image",
+                        "description": "Check out this image! #image #facebook",
+                        "hashtags": ["#image", "#facebook"]
+                    }
+                elif platform == "instagram":
+                    fallback_content[platform] = {
+                        "title": "Beautiful Shot",
+                        "description": "Love this! #instagram #photo",
+                        "hashtags": ["#instagram", "#photo"]
+                    }
+            else:  # video - same as before
+                if platform == "tiktok":
+                    fallback_content[platform] = {
+                        "title": "Video Menarik",
+                        "description": "#fyp #viral #trending",
+                        "hashtags": ["#fyp", "#viral", "#trending"]
+                    }
+                elif platform == "facebook":
+                    fallback_content[platform] = {
+                        "title": "Video Menarik",
+                        "description": "Check out this amazing video! #viral #video",
+                        "hashtags": ["#viral", "#video"]
+                    }
+                elif platform == "youtube":
+                    fallback_content[platform] = {
+                        "title": "Amazing Video",
+                        "description": "Watch this amazing video! #Shorts #viral",
+                        "hashtags": ["#Shorts", "#viral"]
+                    }
+                elif platform == "instagram":
+                    fallback_content[platform] = {
+                        "title": "Amazing Content",
+                        "description": "Check out this content! #viral #instagram",
+                        "hashtags": ["#viral", "#instagram"]
+                    }
         
         return fallback_content
 
@@ -583,33 +769,53 @@ class SocialMediaUploader:
             self._log(f"Video enhancement error: {e}", "WARNING")
             return video_path
 
-    def _upload_to_platform(self, platform: str, video_path: str, content: Dict, video_source: Dict) -> Dict[str, Any]:
-        """Upload ke platform tertentu"""
+    def _upload_to_platform_by_type(self, platform: str, content_source: Dict[str, Any], 
+                                   content_path: str, content: Dict) -> Dict[str, Any]:
+        """Upload ke platform berdasarkan content type"""
         try:
-            if platform == "tiktok" and self.tiktok_uploader:
+            content_type = content_source.get("content_type", "video")
+            
+            if platform == "facebook" and self.facebook_uploader:
+                if content_type == "text":
+                    # Facebook text status
+                    status_text = content_source.get("status_text", "")
+                    enhanced_text = content.get("description", status_text)
+                    return self.facebook_uploader.upload_status(enhanced_text)
+                
+                elif content_type == "image":
+                    # Facebook image post
+                    media_path = content_source.get("media_path", "")
+                    caption = content.get("description", content_source.get("caption", ""))
+                    return self.facebook_uploader.upload_status(caption, media_path)
+                
+                else:  # video
+                    # Facebook reels
+                    description = content.get("description", "Amazing video!")
+                    return self.facebook_uploader.upload_reels(content_path, description)
+            
+            elif platform == "instagram" and self.instagram_uploader:
+                if content_type == "image":
+                    # Instagram image post
+                    caption = content.get("description", content_source.get("caption", ""))
+                    return self.instagram_uploader.upload_photo(content_source.get("media_path", ""), caption)
+                else:  # video
+                    # Instagram reels
+                    caption = content.get("description", "Amazing content! #viral #instagram")
+                    return self.instagram_uploader.upload_reel(content_path, caption)
+            
+            elif platform == "tiktok" and self.tiktok_uploader and content_type == "video":
                 caption = content.get("description", "#fyp #viral #trending")
-                return self.tiktok_uploader.upload_video(video_path, caption)
+                return self.tiktok_uploader.upload_video(content_path, caption)
             
-            elif platform == "facebook" and self.facebook_uploader:
-                description = content.get("description", "Amazing video!")
-                return self.facebook_uploader.upload_reels(video_path, description)
-            
-            elif platform == "youtube" and self.youtube_uploader:
+            elif platform == "youtube" and self.youtube_uploader and content_type == "video":
                 title = content.get("title", "Amazing Video")
                 description = content.get("description", "Check out this video!")
                 if not self.youtube_uploader.initialize_youtube_service():
                     return {"success": False, "message": "YouTube API initialization failed"}
-                return self.youtube_uploader.upload_shorts(video_path, title, description)
-            
-            elif platform == "instagram" and self.instagram_uploader:
-                caption = content.get("description", "Amazing content! #viral #instagram")
-                # Auto-detect if it's a video (for Reel) or image (for Post)
-                video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm']
-                is_reel = any(video_path.lower().endswith(ext) for ext in video_extensions)
-                return self.instagram_uploader.upload_post(video_path, caption, is_reel)
+                return self.youtube_uploader.upload_shorts(content_path, title, description)
             
             else:
-                return {"success": False, "message": f"Platform {platform} tidak tersedia atau uploader tidak diinisialisasi"}
+                return {"success": False, "message": f"Platform {platform} tidak mendukung content type {content_type} atau uploader tidak tersedia"}
                 
         except Exception as e:
             return {"success": False, "message": f"Upload error: {str(e)}"}
@@ -618,11 +824,11 @@ class SocialMediaUploader:
         """Show simplified main interactive menu"""
         print(f"\n{Fore.LIGHTBLUE_EX}🚀 SUPER ADVANCED SOCIAL MEDIA UPLOADER")
         print("=" * 70)
-        print(f"{Fore.LIGHTMAGENTA_EX}🎯 Dengan Video Downloader + AI + FFmpeg + Instagram Integration")
+        print(f"{Fore.LIGHTMAGENTA_EX}🎯 Dengan Video + Text + Media Support + AI + FFmpeg + Instagram Integration")
         print()
         
         print(f"{Fore.YELLOW}📋 MENU UTAMA:")
-        print("1. 🚀 Smart Upload Pipeline (Recommended)")
+        print("1. 🚀 Smart Upload Pipeline (Video/Text/Media)")
         print("2. 📊 System Status & Statistics")
         print("3. 🧹 System Cleanup")
         print("4. ❌ Exit")
@@ -657,12 +863,22 @@ class SocialMediaUploader:
         print(f"\n{Fore.GREEN}🎉 PIPELINE RESULTS:")
         print("=" * 50)
         
-        video_source = result.get("video_source", {})
-        print(f"Video Source: {video_source.get('original_source', 'unknown')}")
-        print(f"Filename: {video_source.get('filename', 'unknown')}")
-        print(f"Size: {video_source.get('file_size_mb', 0):.2f} MB")
+        content_source = result.get("content_source", {})
+        content_type = result.get("content_type", "unknown")
+        
+        print(f"Content Type: {content_type.upper()}")
+        
+        if content_type == "text":
+            status_text = content_source.get("status_text", "")
+            print(f"Status: {status_text[:50]}{'...' if len(status_text) > 50 else ''}")
+        else:
+            print(f"Filename: {content_source.get('filename', 'unknown')}")
+            if content_source.get('file_size_mb'):
+                print(f"Size: {content_source.get('file_size_mb', 0):.2f} MB")
+        
         print(f"AI Content: {'✅ Used' if result.get('used_ai') else '❌ Not used'}")
-        print(f"Video Enhancement: {'✅ Used' if result.get('used_ffmpeg') else '❌ Not used'}")
+        if content_type == "video":
+            print(f"Video Enhancement: {'✅ Used' if result.get('used_ffmpeg') else '❌ Not used'}")
         
         if result.get("successful_uploads"):
             print(f"\n{Fore.GREEN}✅ Successful uploads:")
@@ -722,6 +938,12 @@ class SocialMediaUploader:
             print(f"Gemini API: ✅ Key configured")
         else:
             print(f"Gemini API: ❌ Key not configured")
+        
+        # Content type support
+        print(f"\n{Fore.GREEN}📋 CONTENT TYPE SUPPORT:")
+        print(f"Video Content: ✅ TikTok, Facebook Reels, YouTube Shorts, Instagram Reels")
+        print(f"Text Status: ✅ Facebook Status")
+        print(f"Image/Media: ✅ Facebook Posts, Instagram Posts")
         
         # Download statistics
         if self.video_downloader:
