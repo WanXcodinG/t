@@ -11,9 +11,6 @@ import json
 import time
 from pathlib import Path
 from typing import Optional, Dict, Any, List
-import cv2
-import numpy as np
-from PIL import Image
 import argparse
 from colorama import init, Fore, Style
 
@@ -33,6 +30,15 @@ try:
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
+
+# Try to import CV2 and PIL for video analysis
+try:
+    import cv2
+    import numpy as np
+    from PIL import Image
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
 
 class GeminiAIAssistant:
     def __init__(self, debug: bool = False):
@@ -150,6 +156,10 @@ class GeminiAIAssistant:
 
     def extract_video_frames(self, video_path: str, num_frames: int = 3) -> List[str]:
         """Extract frames dari video untuk analisis"""
+        if not CV2_AVAILABLE:
+            self._log("OpenCV tidak tersedia untuk video analysis", "WARNING")
+            return []
+        
         if not os.path.exists(video_path):
             raise FileNotFoundError(f"Video tidak ditemukan: {video_path}")
         
@@ -199,9 +209,14 @@ class GeminiAIAssistant:
             return self._generate_fallback_analysis(video_path, language)
         
         try:
-            # Extract frames
-            frames = self.extract_video_frames(video_path, num_frames=3)
+            # Extract frames jika CV2 tersedia
+            frames = []
+            if CV2_AVAILABLE:
+                frames = self.extract_video_frames(video_path, num_frames=3)
+            
             if not frames:
+                # Jika tidak bisa extract frames, gunakan fallback analysis
+                self._log("Tidak bisa extract frames, menggunakan fallback analysis", "WARNING")
                 return self._generate_fallback_analysis(video_path, language)
             
             self._log(f"🤖 Menganalisis konten video dengan Gemini 2.0-flash...", "AI")
